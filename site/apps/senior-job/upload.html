@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내 이야기 들려주기 · 경력 프로필 만들기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@700;900&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FBF5E9;
+    --card-1:#FFFFFF;
+    --card-2:#FFF9EE;
+    --ink:#2A2419;
+    --ink-soft:#6E6250;
+    --teal:#1F5C52;
+    --gold-1:#F6CE7C;
+    --gold-2:#C4791F;
+    --gold-3:#8A5A19;
+    --line:#EBDFC4;
+    --danger:#B23A2E;
+    --ok:#1F5C52;
+  }
+  html{font-size:100%;}
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding-bottom:96px;
+    background:
+      radial-gradient(700px 320px at 12% -8%, rgba(246,206,124,.25), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans KR', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    font-size:1.05rem;
+    line-height:1.6;
+  }
+  .wrap{max-width:680px; margin:0 auto; padding:0 20px;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    background:rgba(251,245,233,.92); backdrop-filter:blur(4px);
+    position:sticky; top:0; z-index:20; border-bottom:1px solid var(--line);
+  }
+  .topbar-inner{max-width:680px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .brand{font-family:'Noto Serif KR', serif; font-weight:900; font-size:1.1rem; display:flex; align-items:center; gap:8px;}
+  .brand svg{flex:none;}
+  .textsize{display:flex; align-items:center; gap:4px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:4px;}
+  .textsize button{
+    border:none; background:transparent; cursor:pointer; font-family:'Noto Sans KR'; font-weight:700;
+    color:var(--ink-soft); padding:6px 10px; border-radius:999px; font-size:.85rem;
+  }
+  .textsize button.on{background:var(--teal); color:#fff;}
+
+  /* ---------- Progress ---------- */
+  .progress{display:flex; justify-content:space-between; gap:6px; margin:26px 0 30px;}
+  .pstep{flex:1; text-align:center;}
+  .pcircle{
+    width:34px; height:34px; border-radius:50%; margin:0 auto 6px; display:flex; align-items:center; justify-content:center;
+    background:#fff; border:2px solid var(--line); color:var(--ink-soft); font-weight:700; font-size:.9rem;
+  }
+  .pstep.done .pcircle{background:var(--teal); border-color:var(--teal); color:#fff;}
+  .pstep.current .pcircle{background:var(--gold-2); border-color:var(--gold-2); color:#fff;}
+  .plabel{font-size:.72rem; color:var(--ink-soft); font-weight:700;}
+  .pstep.current .plabel{color:var(--gold-3);}
+
+  /* ---------- Cards / sections ---------- */
+  .wizard-step{display:none;}
+  .wizard-step.active{display:block; animation:fadeIn .25s ease;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+
+  h1.step-title{font-family:'Noto Serif KR', serif; font-weight:900; font-size:1.6rem; line-height:1.4; margin:0 0 10px;}
+  p.step-sub{color:var(--ink-soft); font-size:1rem; line-height:1.75; margin:0 0 26px;}
+
+  .field{margin-bottom:20px;}
+  .field label{display:block; font-weight:700; font-size:1.02rem; margin-bottom:8px;}
+  .field input, .field textarea, .field select{
+    width:100%; font-family:'Noto Sans KR', sans-serif; font-size:1.08rem;
+    padding:14px 16px; border-radius:14px; border:2px solid var(--line); background:#fff; color:var(--ink);
+  }
+  .field input:focus, .field textarea:focus, .field select:focus{outline:none; border-color:var(--gold-2); box-shadow:0 0 0 3px rgba(196,121,31,.15);}
+  .field .hint{font-size:.85rem; color:var(--ink-soft); margin-top:6px;}
+  .field .error{font-size:.9rem; color:var(--danger); margin-top:6px; font-weight:700; display:none;}
+  .field.invalid input{border-color:var(--danger);}
+  .field.invalid .error{display:block;}
+
+  .reassure{
+    display:flex; gap:12px; align-items:flex-start; background:#fff; border:1px solid var(--line);
+    border-radius:16px; padding:16px 18px; margin-bottom:24px;
+  }
+  .reassure svg{flex:none; margin-top:2px;}
+  .reassure p{margin:0; font-size:.95rem; color:var(--ink-soft); line-height:1.7;}
+
+  /* ---------- Interview question cards ---------- */
+  .qcard{background:#fff; border:1px solid var(--line); border-radius:20px; padding:22px; margin-bottom:20px; transition:box-shadow .2s;}
+  .qcard.answered{box-shadow:0 0 0 2px var(--teal) inset;}
+  .qhead{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:16px;}
+  .qtext{font-weight:700; font-size:1.12rem; line-height:1.6;}
+  .qcheck{flex:none; width:26px; height:26px; border-radius:50%; background:var(--teal); color:#fff; display:none; align-items:center; justify-content:center; font-size:.9rem;}
+  .qcard.answered .qcheck{display:flex;}
+
+  .mic-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .mic-btn{
+    display:flex; align-items:center; gap:10px; border:none; cursor:pointer;
+    background:linear-gradient(180deg, var(--teal), #16443D); color:#fff; font-weight:700; font-size:1rem;
+    padding:14px 22px; border-radius:999px; box-shadow:0 8px 18px rgba(31,92,82,.25);
+  }
+  .mic-btn.recording{background:linear-gradient(180deg,#C24A3A,#9E2F22); animation:pulseBtn 1.4s infinite;}
+  @keyframes pulseBtn{0%,100%{box-shadow:0 8px 18px rgba(178,58,46,.3);} 50%{box-shadow:0 8px 26px rgba(178,58,46,.55);}}
+  .rec-timer{font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--danger); font-size:1rem;}
+  .redo-btn{background:none; border:none; color:var(--gold-3); font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:3px; font-size:.95rem;}
+  audio{width:100%; margin-top:10px;}
+  .text-toggle{background:none; border:none; color:var(--ink-soft); text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-size:.9rem; margin-top:12px;}
+  .fallback-text{display:none; margin-top:12px;}
+  .fallback-text.open{display:block;}
+  .mic-note{font-size:.85rem; color:var(--ink-soft); margin-top:10px;}
+
+  /* ---------- Upload ---------- */
+  .dropzone{
+    border:2.5px dashed var(--line); border-radius:20px; padding:40px 20px; text-align:center;
+    background:#fff; margin-bottom:18px; transition:border-color .15s, background .15s;
+  }
+  .dropzone.drag{border-color:var(--gold-2); background:#FFF7E6;}
+  .dropzone svg{margin-bottom:12px;}
+  .dropzone p{margin:0 0 18px; color:var(--ink-soft); font-size:1rem;}
+  .upload-btns{display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+  .upload-btn{
+    display:inline-flex; align-items:center; gap:8px; padding:13px 20px; border-radius:999px; font-weight:700;
+    cursor:pointer; font-size:.98rem; border:2px solid var(--gold-2); color:var(--gold-3); background:#fff;
+  }
+  .upload-btn.primary{background:linear-gradient(180deg,var(--gold-1),var(--gold-2)); color:#fff; border:none;}
+  .filelist{display:flex; flex-direction:column; gap:10px; margin-bottom:10px;}
+  .filerow{display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 16px;}
+  .filerow svg{flex:none;}
+  .filerow .fname{flex:1; font-weight:700; font-size:.95rem; word-break:break-all;}
+  .filerow .fsize{font-size:.8rem; color:var(--ink-soft);}
+  .filerow .fremove{background:none; border:none; color:var(--danger); font-size:1.2rem; cursor:pointer; padding:4px 8px;}
+  .skip-link{display:block; text-align:center; margin-top:8px; color:var(--ink-soft); text-decoration:underline; text-underline-offset:3px; background:none; border:none; cursor:pointer; font-size:.95rem;}
+
+  /* ---------- Processing ---------- */
+  .processing{text-align:center; padding:60px 10px;}
+  .proc-spinner{
+    width:64px; height:64px; margin:0 auto 26px; border-radius:50%;
+    border:5px solid var(--line); border-top-color:var(--gold-2); animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .proc-list{list-style:none; padding:0; margin:0 auto; max-width:360px; text-align:left;}
+  .proc-list li{display:flex; align-items:center; gap:10px; padding:8px 0; color:var(--ink-soft); opacity:.4; font-size:.98rem;}
+  .proc-list li.on{opacity:1; color:var(--ink);}
+  .proc-list li .dot{width:18px; height:18px; border-radius:50%; border:2px solid var(--line); flex:none;}
+  .proc-list li.on .dot{background:var(--teal); border-color:var(--teal); position:relative;}
+  .proc-list li.on .dot::after{content:"✓"; color:#fff; font-size:11px; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;}
+
+  /* ---------- Review ---------- */
+  .ai-banner{
+    display:flex; gap:10px; align-items:center; background:linear-gradient(180deg,#FBEBC9,#F3DBA0);
+    color:var(--gold-3); border-radius:14px; padding:12px 16px; font-weight:700; font-size:.92rem; margin-bottom:22px;
+  }
+  .preview-wrap{display:flex; justify-content:center; margin-bottom:24px;}
+  .preview-card{
+    width:100%; max-width:280px; background:linear-gradient(180deg,var(--card-1),var(--card-2));
+    border:1px solid var(--line); border-radius:22px; padding:26px 20px; text-align:center;
+    box-shadow:0 14px 30px rgba(138,90,25,.1);
+  }
+  .preview-ring{width:88px; height:88px; margin:0 auto 12px; border-radius:50%; padding:4px;
+    background:conic-gradient(from 180deg, var(--gold-1), var(--gold-2), var(--gold-1));
+    display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 4px var(--card-1), 0 10px 22px rgba(196,121,31,.25);}
+  .preview-ring .av{width:100%; height:100%; border-radius:50%; overflow:hidden; background:#EFE9DA;}
+  .preview-ring svg{width:100%; height:100%; display:block;}
+  .preview-name{font-family:'Noto Serif KR', serif; font-weight:700; font-size:1.15rem;}
+  .preview-age{display:inline-block; font-family:'IBM Plex Mono', monospace; font-size:.75rem; color:var(--gold-3); background:#FBEFD6; border-radius:999px; padding:3px 11px; margin:6px 0 14px;}
+  .preview-tags{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:14px;}
+  .preview-tags span{font-size:.75rem; font-weight:700; color:var(--gold-3); background:linear-gradient(180deg,#FBEBC9,#F3DBA0); border-radius:999px; padding:3px 10px;}
+  .preview-fields{text-align:left; font-size:.82rem; color:var(--ink-soft); display:flex; flex-direction:column; gap:5px;}
+  .preview-fields b{color:var(--ink);}
+
+  .tag-edit-row{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px;}
+  .tag-chip{display:flex; align-items:center; gap:6px; background:#FBEFD6; color:var(--gold-3); border-radius:999px; padding:6px 8px 6px 14px; font-weight:700; font-size:.92rem;}
+  .tag-chip button{background:none; border:none; color:var(--gold-3); cursor:pointer; font-size:1rem; line-height:1;}
+  .tag-add{display:flex; gap:8px; margin-top:6px;}
+  .tag-add input{flex:1;}
+  .tag-add button{border:2px solid var(--gold-2); background:#fff; color:var(--gold-3); border-radius:12px; padding:0 16px; font-weight:700; cursor:pointer;}
+
+  /* ---------- Done ---------- */
+  .done-wrap{text-align:center; padding:50px 10px;}
+  .done-badge{width:88px; height:88px; border-radius:50%; margin:0 auto 22px; background:linear-gradient(180deg,var(--gold-1),var(--gold-2)); display:flex; align-items:center; justify-content:center; box-shadow:0 14px 30px rgba(196,121,31,.3);}
+  .done-badge svg{width:44px; height:44px;}
+
+  /* ---------- Bottom nav ---------- */
+  .bottom-nav{
+    position:fixed; bottom:0; left:0; right:0; background:rgba(251,245,233,.95); backdrop-filter:blur(6px);
+    border-top:1px solid var(--line); padding:14px 20px calc(14px + env(safe-area-inset-bottom));
+    display:flex; gap:12px; z-index:30;
+  }
+  .bottom-nav-inner{max-width:680px; margin:0 auto; display:flex; gap:12px; width:100%;}
+  .nav-btn{
+    flex:1; padding:16px; border-radius:16px; font-weight:900; font-size:1.08rem; cursor:pointer; border:none;
+  }
+  .nav-btn.prev{background:#fff; border:2px solid var(--line); color:var(--ink-soft); flex:0 0 110px;}
+  .nav-btn.next{background:linear-gradient(180deg,var(--gold-1),var(--gold-2)); color:#fff; box-shadow:0 8px 18px rgba(196,121,31,.3);}
+  .nav-btn.restart{background:linear-gradient(180deg,var(--teal),#16443D); color:#fff; box-shadow:0 8px 18px rgba(31,92,82,.3);}
+
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important;} }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:10px;left:10px;z-index:99999;display:flex;gap:6px;font-family:system-ui,sans-serif;font-size:12px;"><a href="../../" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">← 홈</a><a href="index.html" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">인재 목록 보기</a></div>
+
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--gold-2)"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.8 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>
+        내 이야기 들려주기
+      </div>
+      <div class="textsize" role="group" aria-label="글자 크기 조절">
+        <button type="button" data-size="100" class="on">가</button>
+        <button type="button" data-size="115">가+</button>
+        <button type="button" data-size="130">가++</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="progress" id="progressBar"></div>
+
+    <!-- STEP 1: 기본정보 -->
+    <section class="wizard-step" id="step-basic">
+      <h1 class="step-title">먼저, 기본 정보를 알려주세요</h1>
+      <p class="step-sub">천천히 입력하셔도 괜찮아요. 언제든 이전으로 돌아가 고치실 수 있어요.</p>
+
+      <div class="reassure">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-2)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+        <p>사진은 따로 찍지 않으셔도 괜찮아요. 저희가 자동으로 예쁜 프로필 그림을 만들어드려요.</p>
+      </div>
+
+      <div class="field" id="f-name">
+        <label for="in-name">이름</label>
+        <input id="in-name" type="text" placeholder="예: 김영자" autocomplete="name">
+        <div class="error">이름을 입력해주세요</div>
+      </div>
+      <div class="field" id="f-age">
+        <label for="in-age">나이</label>
+        <input id="in-age" type="number" inputmode="numeric" placeholder="예: 68" min="19" max="110">
+        <div class="error">나이를 입력해주세요</div>
+      </div>
+      <div class="field" id="f-phone">
+        <label for="in-phone">연락처</label>
+        <input id="in-phone" type="tel" placeholder="예: 010-1234-5678" autocomplete="tel">
+        <div class="hint">연락 가능한 전화번호를 적어주세요</div>
+        <div class="error">연락처를 입력해주세요</div>
+      </div>
+      <div class="field" id="f-address">
+        <label for="in-address">사는 지역</label>
+        <input id="in-address" type="text" placeholder="예: 서울 성북구">
+        <div class="hint">정확한 주소가 아니어도 괜찮아요. 구/동 정도면 충분해요.</div>
+      </div>
+    </section>
+
+    <!-- STEP 2: 음성 인터뷰 -->
+    <section class="wizard-step" id="step-interview">
+      <h1 class="step-title">이제 목소리로 이야기해주세요</h1>
+      <p class="step-sub">버튼을 누르고 편하게 말씀하시면 돼요. 글로 적는 게 더 편하시면 그렇게 하셔도 좋아요.</p>
+      <div id="qcards"></div>
+    </section>
+
+    <!-- STEP 3: 서류 업로드 -->
+    <section class="wizard-step" id="step-upload">
+      <h1 class="step-title">이력서나 서류가 있다면 올려주세요</h1>
+      <p class="step-sub">사진, 스캔본, 문서 파일 모두 괜찮아요. 여러 개를 한 번에 올리셔도 돼요. 없으시면 건너뛰셔도 괜찮습니다.</p>
+
+      <div class="dropzone" id="dropzone">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--gold-2)" stroke-width="1.8"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <p>여기로 파일을 끌어다 놓으셔도 되고,<br>아래 버튼을 눌러도 돼요</p>
+        <div class="upload-btns">
+          <label class="upload-btn primary">
+            📁 파일 선택하기
+            <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="display:none">
+          </label>
+          <label class="upload-btn">
+            📷 사진으로 찍기
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+          </label>
+        </div>
+      </div>
+
+      <div class="filelist" id="fileList"></div>
+      <button type="button" class="skip-link" id="skipUpload">지금은 서류 없이 건너뛸게요</button>
+    </section>
+
+    <!-- STEP 4: 처리 중 -->
+    <section class="wizard-step" id="step-processing">
+      <div class="processing">
+        <div class="proc-spinner"></div>
+        <h1 class="step-title" style="text-align:center;">AI가 프로필을 정리하고 있어요</h1>
+        <p class="step-sub" style="text-align:center;">잠시만 기다려주세요</p>
+        <ul class="proc-list" id="procList">
+          <li><span class="dot"></span> 음성 내용을 텍스트로 정리하고 있어요</li>
+          <li><span class="dot"></span> 특기와 경력 태그를 뽑고 있어요</li>
+          <li><span class="dot"></span> 희망 직종과 가능 시간을 정리하고 있어요</li>
+          <li><span class="dot"></span> 프로필 카드를 만들고 있어요</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- STEP 5: 확인 -->
+    <section class="wizard-step" id="step-review">
+      <h1 class="step-title">프로필을 확인해주세요</h1>
+      <p class="step-sub">AI가 말씀하신 내용을 바탕으로 만들어봤어요. 틀린 부분은 자유롭게 고쳐주세요.</p>
+
+      <div class="ai-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--gold-3)"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.8 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>
+        AI가 자동으로 만든 프로필이에요. 확인 후 수정해주세요.
+      </div>
+
+      <div class="preview-wrap"><div class="preview-card" id="previewCard"></div></div>
+
+      <div class="field">
+        <label for="rv-job">희망 직종</label>
+        <input id="rv-job" type="text">
+      </div>
+      <div class="field">
+        <label for="rv-time">가능 시간</label>
+        <input id="rv-time" type="text">
+      </div>
+      <div class="field">
+        <label>특기 태그</label>
+        <div class="tag-edit-row" id="tagEditRow"></div>
+        <div class="tag-add">
+          <input id="tagAddInput" type="text" placeholder="예: 요리">
+          <button type="button" id="tagAddBtn">추가</button>
+        </div>
+      </div>
+      <div class="field">
+        <label id="fileCountLabel"></label>
+      </div>
+    </section>
+
+    <!-- STEP 6: 완료 -->
+    <section class="wizard-step" id="step-done">
+      <div class="done-wrap">
+        <div class="done-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h1 class="step-title" style="text-align:center;" id="doneTitle">제출이 완료되었어요!</h1>
+        <p class="step-sub" style="text-align:center;" id="doneSub"></p>
+      </div>
+    </section>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button type="button" class="nav-btn prev" id="btnPrev" style="display:none;">이전</button>
+      <button type="button" class="nav-btn next" id="btnNext">다음</button>
+    </div>
+  </div>
+
+<script>
+  // ---------- 글자 크기 조절 ----------
+  document.querySelectorAll(".textsize button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.documentElement.style.fontSize = btn.dataset.size + "%";
+      document.querySelectorAll(".textsize button").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+    });
+  });
+
+  // ---------- 프로필 일러스트 (메인 페이지와 동일한 방식) ----------
+  const SKIN=["#E8B88A","#D9A066","#C68642","#F0C9A0","#DDAE7E"];
+  const HAIR=["#8B8B8B","#E8E6E1","#3A2E28","#6B5B4F","#B5AFA6","#54473C"];
+  const BGTINT=["#FBEFD9","#F3E9DB","#FBE7D4","#F4ECD9","#F6EAD6"];
+  const COLLAR=["#1F5C52","#C4791F","#9E4636","#5B6B3F","#3A5A78","#8A5A19"];
+  function seedOf(str){let h=0; for(const c of str) h=(h*31+c.charCodeAt(0))>>>0; return h;}
+  function hairShape(style,hair){
+    switch(style){
+      case 0: return `<path d="M16 27 Q16 9 32 9 Q48 9 48 27 Q48 17 32 17 Q16 17 16 27 Z" fill="${hair}"/>`;
+      case 1: return `<path d="M16 27 Q16 9 34 9 Q49 10 48 24 Q44 15 30 16 Q18 17 16 27 Z" fill="${hair}"/>`;
+      case 2: return `<path d="M16 26 Q17 10 32 10 Q47 10 47 26 Q47 18 32 18 Q17 18 16 26 Z" fill="${hair}"/><circle cx="32" cy="8" r="5.5" fill="${hair}"/>`;
+      case 3: return `<path d="M17 23 Q17 15 22 12 M47 23 Q47 15 42 12 M22 12 Q32 8 42 12" stroke="${hair}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`;
+      default: return `<path d="M15 28 Q14 9 32 9 Q50 9 49 28 Q49 20 44 22 Q46 15 40 15 Q34 12 28 15 Q20 14 20 22 Q17 20 15 28 Z" fill="${hair}"/>`;
+    }
+  }
+  function portraitSVG(name){
+    const h=seedOf(name||"게스트");
+    const skin=SKIN[h%SKIN.length], hair=HAIR[(h>>2)%HAIR.length], style=(h>>4)%5;
+    const bg=BGTINT[(h>>8)%BGTINT.length], collar=COLLAR[(h>>10)%COLLAR.length];
+    return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" fill="${bg}"/>
+      <path d="M4 66 Q32 44 60 66 Z" fill="${collar}"/>
+      <rect x="27" y="38" width="10" height="10" fill="${skin}"/>
+      <ellipse cx="16" cy="30" rx="3" ry="4" fill="${skin}"/>
+      <ellipse cx="48" cy="30" rx="3" ry="4" fill="${skin}"/>
+      <ellipse cx="32" cy="29" rx="15" ry="17" fill="${skin}"/>
+      ${hairShape(style,hair)}
+      <ellipse cx="26" cy="22" rx="8" ry="5" fill="#FFFFFF" opacity="0.14"/>
+    </svg>`;
+  }
+
+  // ---------- 상태 ----------
+  const STEPS = ["basic","interview","upload","processing","review","done"];
+  const STEP_LABELS = ["기본정보","음성인터뷰","서류첨부","확인"];
+  let stepIndex = 0;
+
+  const state = {
+    name:"", age:"", phone:"", address:"",
+    answers:{ q1:{audioUrl:null, text:""}, q2:{audioUrl:null, text:""}, q3:{audioUrl:null, text:""} },
+    files:[],
+    job:"", time:"", tags:[]
+  };
+
+  const QUESTIONS = [
+    {id:"q1", text:"지금까지 어떤 일을 해오셨나요? 잘하시는 것도 함께 말씀해주세요."},
+    {id:"q2", text:"어떤 일을 하고 싶으신가요?"},
+    {id:"q3", text:"언제 일하실 수 있으신가요?"}
+  ];
+
+  // ---------- 진행바 ----------
+  function renderProgress(){
+    const bar = document.getElementById("progressBar");
+    // processing/review/done 은 진행바에서 review 단계를 4번째로 표시
+    const mapIndex = { basic:0, interview:1, upload:2, processing:3, review:3 };
+    const cur = mapIndex[STEPS[stepIndex]];
+    if (STEPS[stepIndex] === "done"){ bar.style.display="none"; return; }
+    bar.style.display="flex";
+    bar.innerHTML = STEP_LABELS.map((label,i) => {
+      const cls = i < cur ? "done" : (i === cur ? "current" : "");
+      const inner = i < cur ? "✓" : (i+1);
+      return `<div class="pstep ${cls}"><div class="pcircle">${inner}</div><div class="plabel">${label}</div></div>`;
+    }).join("");
+  }
+
+  // ---------- 화면 전환 ----------
+  function showStep(){
+    document.querySelectorAll(".wizard-step").forEach(s => s.classList.remove("active"));
+    document.getElementById("step-" + STEPS[stepIndex]).classList.add("active");
+    renderProgress();
+
+    const prevBtn = document.getElementById("btnPrev");
+    const nextBtn = document.getElementById("btnNext");
+    prevBtn.style.display = stepIndex === 0 || STEPS[stepIndex]==="processing" || STEPS[stepIndex]==="done" ? "none" : "block";
+
+    if (STEPS[stepIndex] === "processing"){
+      nextBtn.style.display = "none";
+      runProcessing();
+    } else if (STEPS[stepIndex] === "done"){
+      nextBtn.style.display = "none";
+      prevBtn.style.display = "none";
+    } else {
+      nextBtn.style.display = "block";
+      nextBtn.textContent = STEPS[stepIndex] === "review" ? "이대로 제출할게요" : "다음";
+    }
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+
+  function goNext(){
+    const cur = STEPS[stepIndex];
+    if (cur === "basic" && !validateBasic()) return;
+    if (cur === "review"){ finalizeSubmit(); return; }
+    if (stepIndex < STEPS.length - 1){ stepIndex++; showStep(); }
+  }
+  function goPrev(){ if (stepIndex > 0){ stepIndex--; showStep(); } }
+
+  document.getElementById("btnNext").addEventListener("click", goNext);
+  document.getElementById("btnPrev").addEventListener("click", goPrev);
+
+  // ---------- STEP 1: 기본정보 ----------
+  function validateBasic(){
+    state.name = document.getElementById("in-name").value.trim();
+    state.age = document.getElementById("in-age").value.trim();
+    state.phone = document.getElementById("in-phone").value.trim();
+    state.address = document.getElementById("in-address").value.trim();
+
+    let ok = true;
+    toggleError("f-name", !state.name); if(!state.name) ok=false;
+    toggleError("f-age", !state.age); if(!state.age) ok=false;
+    toggleError("f-phone", !state.phone); if(!state.phone) ok=false;
+    return ok;
+  }
+  function toggleError(fieldId, isInvalid){
+    document.getElementById(fieldId).classList.toggle("invalid", isInvalid);
+  }
+
+  // ---------- STEP 2: 음성 인터뷰 ----------
+  const recorders = {};
+
+  function renderQuestions(){
+    const wrap = document.getElementById("qcards");
+    wrap.innerHTML = QUESTIONS.map(q => `
+      <div class="qcard" id="qcard-${q.id}">
+        <div class="qhead">
+          <div class="qtext">${q.text}</div>
+          <div class="qcheck">✓</div>
+        </div>
+        <div class="mic-row" id="microw-${q.id}">
+          <button type="button" class="mic-btn" data-q="${q.id}">🎙️ 눌러서 녹음하기</button>
+        </div>
+        <button type="button" class="text-toggle" data-q="${q.id}">또는 글로 적을게요</button>
+        <div class="fallback-text" id="fallback-${q.id}">
+          <textarea rows="3" placeholder="여기에 편하게 적어주세요" data-q="${q.id}"></textarea>
+        </div>
+        <div class="mic-note" id="note-${q.id}"></div>
+      </div>
+    `).join("");
+
+    wrap.querySelectorAll(".mic-btn").forEach(btn => {
+      btn.addEventListener("click", () => toggleRecording(btn.dataset.q));
+    });
+    wrap.querySelectorAll(".text-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const el = document.getElementById("fallback-" + btn.dataset.q);
+        el.classList.toggle("open");
+      });
+    });
+    wrap.querySelectorAll("textarea").forEach(ta => {
+      ta.addEventListener("input", () => {
+        state.answers[ta.dataset.q].text = ta.value;
+        updateQAnswered(ta.dataset.q);
+      });
+    });
+  }
+
+  function updateQAnswered(qid){
+    const answered = !!(state.answers[qid].audioUrl || state.answers[qid].text.trim());
+    document.getElementById("qcard-" + qid).classList.toggle("answered", answered);
+  }
+
+  async function toggleRecording(qid){
+    if (!recorders[qid]) recorders[qid] = { state:"idle" };
+    const rec = recorders[qid];
+
+    if (rec.state === "idle"){
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        document.getElementById("note-" + qid).textContent = "이 브라우저에서는 녹음을 지원하지 않아요. 아래 글로 적어주세요.";
+        document.getElementById("fallback-" + qid).classList.add("open");
+        return;
+      }
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+        const mr = new MediaRecorder(stream);
+        const chunks = [];
+        mr.ondataavailable = e => chunks.push(e.data);
+        mr.onstop = () => {
+          const blob = new Blob(chunks, {type:"audio/webm"});
+          const url = URL.createObjectURL(blob);
+          state.answers[qid].audioUrl = url;
+          updateQAnswered(qid);
+          stream.getTracks().forEach(t => t.stop());
+          renderRecordedUI(qid, url);
+        };
+        mr.start();
+        rec.mediaRecorder = mr;
+        rec.state = "recording";
+        rec.seconds = 0;
+        rec.timer = setInterval(() => {
+          rec.seconds++;
+          const m = String(Math.floor(rec.seconds/60)).padStart(2,"0");
+          const s = String(rec.seconds%60).padStart(2,"0");
+          const t = document.getElementById("timer-" + qid);
+          if (t) t.textContent = `${m}:${s}`;
+        }, 1000);
+        renderRecordingUI(qid);
+      }catch(err){
+        document.getElementById("note-" + qid).textContent = "마이크를 사용할 수 없어요. 아래 글로 적어주세요.";
+        document.getElementById("fallback-" + qid).classList.add("open");
+      }
+    } else if (rec.state === "recording"){
+      rec.mediaRecorder.stop();
+      clearInterval(rec.timer);
+      rec.state = "recorded";
+    }
+  }
+
+  function renderRecordingUI(qid){
+    document.getElementById("microw-" + qid).innerHTML = `
+      <button type="button" class="mic-btn recording" data-q="${qid}">⏹ 정지하기</button>
+      <span class="rec-timer" id="timer-${qid}">00:00</span>`;
+    document.querySelector(`#microw-${qid} .mic-btn`).addEventListener("click", () => toggleRecording(qid));
+  }
+
+  function renderRecordedUI(qid, url){
+    document.getElementById("microw-" + qid).innerHTML = `
+      <div style="width:100%;">
+        <audio controls src="${url}"></audio>
+        <button type="button" class="redo-btn" data-q="${qid}">🔄 다시 녹음하기</button>
+      </div>`;
+    document.querySelector(`#microw-${qid} .redo-btn`).addEventListener("click", () => {
+      recorders[qid].state = "idle";
+      state.answers[qid].audioUrl = null;
+      updateQAnswered(qid);
+      document.getElementById("microw-" + qid).innerHTML = `<button type="button" class="mic-btn" data-q="${qid}">🎙️ 눌러서 녹음하기</button>`;
+      document.querySelector(`#microw-${qid} .mic-btn`).addEventListener("click", () => toggleRecording(qid));
+    });
+  }
+
+  // ---------- STEP 3: 서류 업로드 ----------
+  function fmtSize(bytes){
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(0) + " KB";
+    return (bytes/1024/1024).toFixed(1) + " MB";
+  }
+  function renderFileList(){
+    const list = document.getElementById("fileList");
+    list.innerHTML = state.files.map((f,i) => `
+      <div class="filerow">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-2)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        <span class="fname">${f.name}</span>
+        <span class="fsize">${fmtSize(f.size)}</span>
+        <button type="button" class="fremove" data-i="${i}" aria-label="삭제">✕</button>
+      </div>`).join("");
+    list.querySelectorAll(".fremove").forEach(btn => {
+      btn.addEventListener("click", () => { state.files.splice(Number(btn.dataset.i),1); renderFileList(); });
+    });
+  }
+  function addFiles(fileArr){
+    Array.from(fileArr).forEach(f => state.files.push(f));
+    renderFileList();
+  }
+  document.getElementById("fileInput").addEventListener("change", e => addFiles(e.target.files));
+  document.getElementById("cameraInput").addEventListener("change", e => addFiles(e.target.files));
+  document.getElementById("skipUpload").addEventListener("click", goNext);
+
+  const dz = document.getElementById("dropzone");
+  ["dragenter","dragover"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add("drag"); }));
+  ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove("drag"); }));
+  dz.addEventListener("drop", e => { if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+  // ---------- STEP 4: 처리 중 (연출) ----------
+  function runProcessing(){
+    const items = document.querySelectorAll("#procList li");
+    items.forEach(li => li.classList.remove("on"));
+    let i = 0;
+    function step(){
+      if (i < items.length){
+        items[i].classList.add("on");
+        i++;
+        setTimeout(step, 600);
+      } else {
+        prepareReview();
+        setTimeout(() => { stepIndex = STEPS.indexOf("review"); showStep(); }, 500);
+      }
+    }
+    setTimeout(step, 400);
+  }
+
+  // ---------- 결과(review) 생성 로직 (간단한 규칙 기반, 실제 LLM 미연동) ----------
+  function extractTags(text){
+    if (!text) return [];
+    return text.split(/[,，、\s/·]+/).map(s=>s.trim()).filter(s=>s.length>=2 && s.length<=8).slice(0,4);
+  }
+  function prepareReview(){
+    const q1 = state.answers.q1.text;
+    const q2 = state.answers.q2.text;
+    const q3 = state.answers.q3.text;
+
+    let tags = extractTags(q1);
+    if (tags.length === 0) tags = ["성실함","책임감","경험많음"];
+    state.tags = tags;
+
+    state.job = q2 ? q2.slice(0,20) : "협의 가능";
+    state.time = q3 ? q3.slice(0,20) : "협의 가능";
+
+    document.getElementById("rv-job").value = state.job;
+    document.getElementById("rv-time").value = state.time;
+    renderTagEditor();
+    renderPreviewCard();
+
+    document.getElementById("fileCountLabel").textContent = state.files.length
+      ? `📎 첨부한 서류 ${state.files.length}개`
+      : "📎 첨부한 서류가 없어요";
+  }
+
+  function renderTagEditor(){
+    const row = document.getElementById("tagEditRow");
+    row.innerHTML = state.tags.map((t,i) => `
+      <span class="tag-chip">#${t}<button type="button" data-i="${i}" aria-label="태그 삭제">✕</button></span>`).join("");
+    row.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => { state.tags.splice(Number(btn.dataset.i),1); renderTagEditor(); renderPreviewCard(); });
+    });
+  }
+  document.getElementById("tagAddBtn").addEventListener("click", () => {
+    const input = document.getElementById("tagAddInput");
+    const v = input.value.trim();
+    if (v){ state.tags.push(v); input.value=""; renderTagEditor(); renderPreviewCard(); }
+  });
+  document.getElementById("rv-job").addEventListener("input", e => { state.job = e.target.value; renderPreviewCard(); });
+  document.getElementById("rv-time").addEventListener("input", e => { state.time = e.target.value; renderPreviewCard(); });
+
+  function renderPreviewCard(){
+    document.getElementById("previewCard").innerHTML = `
+      <div class="preview-ring"><div class="av">${portraitSVG(state.name)}</div></div>
+      <div class="preview-name">${state.name || "이름"}</div>
+      <div class="preview-age">${state.age || "-"}세</div>
+      <div class="preview-tags">${state.tags.map(t=>`<span>#${t}</span>`).join("")}</div>
+      <div class="preview-fields">
+        <div><b>희망 직종</b> · ${state.job || "-"}</div>
+        <div><b>가능 시간</b> · ${state.time || "-"}</div>
+        <div><b>거주 지역</b> · ${state.address || "-"}</div>
+        <div><b>연락처</b> · ${state.phone || "-"}</div>
+      </div>`;
+  }
+
+  // ---------- STEP 6: 완료 ----------
+  function finalizeSubmit(){
+    document.getElementById("doneTitle").textContent = `${state.name}님, 제출이 완료되었어요!`;
+    document.getElementById("doneSub").textContent = "소중한 이야기를 들려주셔서 감사합니다. 확인 후 1~2일 안에 연락드릴게요.";
+    stepIndex = STEPS.indexOf("done");
+    showStep();
+  }
+
+  // ---------- 초기화 ----------
+  renderQuestions();
+  showStep();
+</script>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>야간 항성의 · Night Astrolabe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #05070f;
+    --surface: #0b1020;
+    --surface-2: #101832;
+    --line: #1c2544;
+    --text: #e9edf7;
+    --muted: #7280a3;
+    --gold: #e8c468;
+    --nebula: #6f8dff;
+    --danger: #e8747a;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  #app{ position:relative; height:100vh; width:100vw; display:flex; flex-direction:column; }
+
+  header{
+    padding: 18px 20px 14px;
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--surface), transparent);
+    z-index: 5;
+  }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand .title{
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 600; font-size: 24px; letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .brand .sub{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .clock{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--gold); text-align:right;
+  }
+
+  nav.tabs{
+    display:flex; gap:8px; padding: 12px 20px;
+    z-index: 5;
+  }
+  nav.tabs button{
+    flex:1; padding: 11px 0; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--line);
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    font-family: 'Inter', sans-serif; letter-spacing: 0.01em;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+  }
+  nav.tabs button.active{
+    background: var(--surface-2); border-color: var(--gold); color: var(--gold);
+  }
+  nav.tabs button .dot{ width:5px; height:5px; border-radius:50%; background: currentColor; opacity: 0.7; }
+
+  main{ position:relative; flex:1; overflow:hidden; }
+  .screen{ position:absolute; inset:0; display:none; }
+  .screen.active{ display:flex; flex-direction:column; align-items:center; }
+
+  /* --- 지도 모드 (아스트롤라베 스타일) --- */
+  #mapWrap{ justify-content:center; padding: 8px 0 0; }
+  #skyCanvas{ touch-action: none; }
+  .map-caption{
+    font-family:'JetBrains Mono', monospace; font-size: 10px; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-top: 10px;
+  }
+  .readout{
+    display:flex; gap: 18px; margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted);
+  }
+  .readout b{ color: var(--gold); font-weight: 500; }
+
+  /* --- AR 모드 --- */
+  #arWrap{ background:#000; }
+  #arVideo{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  }
+  #arCanvas{ position:absolute; inset:0; width:100%; height:100%; }
+  .ar-hud{
+    position:absolute; top: 16px; left: 16px; right:16px;
+    display:flex; justify-content:space-between;
+    font-family:'JetBrains Mono', monospace; font-size: 11px; color: var(--gold);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    pointer-events:none;
+  }
+  .ar-crosshair{
+    position:absolute; top:50%; left:50%; width:14px; height:14px;
+    transform: translate(-50%,-50%);
+    border: 1px solid rgba(232,196,104,0.6); border-radius:50%;
+    pointer-events:none;
+  }
+  .ar-crosshair::after{
+    content:''; position:absolute; top:50%; left:50%; width:2px; height:2px;
+    background: var(--gold); border-radius:50%; transform:translate(-50%,-50%);
+  }
+
+  .center-msg{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap: 14px; padding: 30px; text-align:center;
+  }
+  .center-msg p{ color: var(--muted); font-size: 13px; line-height:1.6; max-width: 280px; margin:0; }
+  .center-msg .glyph{ font-size: 34px; opacity:0.7; }
+  .btn{
+    padding: 12px 26px; border-radius: 10px; border: 1px solid var(--gold);
+    background: transparent; color: var(--gold); font-family:'Inter', sans-serif;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+  }
+  .btn:active{ background: rgba(232,196,104,0.12); }
+  .error-text{ color: var(--danger); }
+
+  footer{
+    padding: 10px 20px 16px; text-align:center;
+    font-family:'JetBrains Mono', monospace; font-size: 9px; letter-spacing:0.1em;
+    color: var(--muted); text-transform:uppercase; opacity:0.6;
+  }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:10px;left:10px;z-index:99999;font-family:system-ui,sans-serif;font-size:12px;"><a href="../../" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">← 홈</a></div>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="title">야간 항성의</div>
+      <div class="sub">Night Astrolabe · Live Sky</div>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </header>
+
+  <nav class="tabs">
+    <button id="tabMap" class="active"><span class="dot"></span>천구도</button>
+    <button id="tabAr"><span class="dot"></span>AR 관측</button>
+  </nav>
+
+  <main>
+    <!-- 지도 모드 -->
+    <div id="mapWrap" class="screen active">
+      <div id="mapInner" class="center-msg">
+        <div class="glyph">✦</div>
+        <p>현재 위치 기준으로 지금 보이는 별과 행성을 계산합니다. 위치 권한을 허용해주세요.</p>
+        <button class="btn" id="locBtn">위치 허용하고 시작</button>
+      </div>
+    </div>
+
+    <!-- AR 모드 -->
+    <div id="arWrap" class="screen">
+      <div id="arInner" class="center-msg">
+        <div class="glyph">◎</div>
+        <p>카메라와 방향 센서로 실제 하늘 위에 별을 겹쳐 보여줍니다.</p>
+        <button class="btn" id="arBtn">카메라 허용하고 시작</button>
+      </div>
+    </div>
+  </main>
+
+  <footer id="footerNote">밝은 별 35개 · 별자리 3종 데모</footer>
+</div>
+
+<script>
+/* ============ 천체 계산 (Alt/Az) ============ */
+function toJulian(date){ return date.getTime()/86400000 + 2440587.5; }
+function gmstDeg(date){
+  const JD = toJulian(date);
+  const T = (JD - 2451545.0) / 36525;
+  let g = 280.46061837 + 360.98564736629*(JD-2451545.0) + 0.000387933*T*T - (T*T*T)/38710000;
+  g = g % 360; if(g<0) g+=360;
+  return g;
+}
+function raDecToAltAz(raH, decDeg, latDeg, lonDeg, date){
+  const rad = Math.PI/180;
+  const lst = (gmstDeg(date) + lonDeg) % 360;
+  let ha = lst - raH*15;
+  ha = ((ha+540)%360)-180;
+  const haR=ha*rad, decR=decDeg*rad, latR=latDeg*rad;
+  const sinAlt = Math.sin(decR)*Math.sin(latR) + Math.cos(decR)*Math.cos(latR)*Math.cos(haR);
+  const alt = Math.asin(Math.max(-1,Math.min(1,sinAlt)));
+  const y = Math.sin(haR);
+  const x = Math.cos(haR)*Math.sin(latR) - Math.tan(decR)*Math.cos(latR);
+  let az = Math.atan2(y,x)*180/Math.PI + 180;
+  az = ((az%360)+360)%360;
+  return { altitude: alt*180/Math.PI, azimuth: az };
+}
+
+/* 저정밀 행성 위치 (근사 궤도요소 기반, 데모용) */
+const PLANETS = [
+  // name, a(AU), e, i, L0(deg), Ldot(deg/day, mean), longPeri, longNode  -- 단순화된 근사치
+  { name:'Mercury', ra: null },
+];
+// (행성 정밀 계산은 생략 — 데모 스코프를 별자리 중심으로 유지)
+
+/* ============ 별 카탈로그 ============ */
+const STARS = [
+  { name:"Sirius", ra:6.7525, dec:-16.7161, mag:-1.46 },
+  { name:"Canopus", ra:6.3992, dec:-52.6957, mag:-0.74 },
+  { name:"Arcturus", ra:14.2610, dec:19.1825, mag:-0.05 },
+  { name:"Vega", ra:18.6156, dec:38.7837, mag:0.03 },
+  { name:"Capella", ra:5.2782, dec:45.9980, mag:0.08 },
+  { name:"Rigel", ra:5.2423, dec:-8.2016, mag:0.13 },
+  { name:"Procyon", ra:7.6550, dec:5.2250, mag:0.34 },
+  { name:"Betelgeuse", ra:5.9195, dec:7.4071, mag:0.50 },
+  { name:"Achernar", ra:1.6286, dec:-57.2367, mag:0.46 },
+  { name:"Altair", ra:19.8464, dec:8.8683, mag:0.77 },
+  { name:"Aldebaran", ra:4.5987, dec:16.5093, mag:0.85 },
+  { name:"Antares", ra:16.4901, dec:-26.4320, mag:0.96 },
+  { name:"Spica", ra:13.4199, dec:-11.1613, mag:0.97 },
+  { name:"Pollux", ra:7.7553, dec:28.0262, mag:1.14 },
+  { name:"Fomalhaut", ra:22.9608, dec:-29.6222, mag:1.16 },
+  { name:"Deneb", ra:20.6905, dec:45.2803, mag:1.25 },
+  { name:"Regulus", ra:10.1395, dec:11.9672, mag:1.35 },
+  { name:"Polaris", ra:2.5303, dec:89.2641, mag:1.98 },
+  { name:"Dubhe", ra:11.0621, dec:61.7511, mag:1.79 },
+  { name:"Merak", ra:11.0307, dec:56.3824, mag:2.37 },
+  { name:"Phecda", ra:11.8972, dec:53.6948, mag:2.44 },
+  { name:"Megrez", ra:12.2571, dec:57.0326, mag:3.31 },
+  { name:"Alioth", ra:12.9005, dec:55.9598, mag:1.77 },
+  { name:"Mizar", ra:13.3988, dec:54.9254, mag:2.23 },
+  { name:"Alkaid", ra:13.7923, dec:49.3133, mag:1.86 },
+  { name:"Alnitak", ra:5.6793, dec:-1.9426, mag:1.74 },
+  { name:"Alnilam", ra:5.6036, dec:-1.2019, mag:1.69 },
+  { name:"Mintaka", ra:5.5334, dec:-0.2991, mag:2.23 },
+  { name:"Saiph", ra:5.7959, dec:-9.6696, mag:2.06 },
+  { name:"Bellatrix", ra:5.4188, dec:6.3497, mag:1.64 },
+  { name:"Castor", ra:7.5766, dec:31.8883, mag:1.58 },
+  { name:"Shedar", ra:0.6751, dec:56.5373, mag:2.24 },
+  { name:"Caph", ra:0.1530, dec:59.1498, mag:2.28 },
+  { name:"Gamma Cas", ra:0.9451, dec:60.7167, mag:2.47 },
+  { name:"Ruchbah", ra:1.4304, dec:60.2353, mag:2.68 },
+  { name:"Segin", ra:1.9066, dec:63.6701, mag:3.35 },
+];
+const LINES = {
+  UMa: ["Dubhe","Merak","Phecda","Megrez","Dubhe","Megrez","Alioth","Mizar","Alkaid"],
+  Ori: ["Betelgeuse","Alnitak","Alnilam","Mintaka","Bellatrix","Betelgeuse","Mintaka","Saiph","Alnitak","Rigel","Alnilam"],
+  Cas: ["Segin","Ruchbah","Gamma Cas","Shedar","Caph"],
+};
+
+/* ============ 상태 ============ */
+let coords = null; // {latitude, longitude}
+let mapCtx=null, mapCanvas=null, R=0, CX=0, CY=0;
+let arCtx=null, arCanvas=null, arVideo=null;
+let heading=0, pitch=0;
+let orientationReady=false;
+
+/* ============ 시계 ============ */
+function tickClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ============ 탭 전환 ============ */
+const tabMap = document.getElementById('tabMap');
+const tabAr = document.getElementById('tabAr');
+const mapWrap = document.getElementById('mapWrap');
+const arWrap = document.getElementById('arWrap');
+tabMap.onclick = () => { tabMap.classList.add('active'); tabAr.classList.remove('active'); mapWrap.classList.add('active'); arWrap.classList.remove('active'); stopAr(); };
+tabAr.onclick = () => { tabAr.classList.add('active'); tabMap.classList.remove('active'); arWrap.classList.add('active'); mapWrap.classList.remove('active'); };
+
+/* ============ 지도 모드 ============ */
+document.getElementById('locBtn').onclick = startMap;
+
+function startMap(){
+  const inner = document.getElementById('mapInner');
+  inner.innerHTML = '<p class="error-text" style="display:none"></p>';
+  if(!navigator.geolocation){
+    inner.innerHTML = '<div class="glyph error-text">✕</div><p class="error-text">이 브라우저는 위치 정보를 지원하지 않아요.</p>';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      buildMapCanvas();
+      navigator.geolocation.watchPosition(
+        (p)=>{ coords = { latitude:p.coords.latitude, longitude:p.coords.longitude }; },
+        ()=>{}, { enableHighAccuracy:false, maximumAge:30000 }
+      );
+    },
+    (err)=>{
+      document.getElementById('mapInner').innerHTML =
+        '<div class="glyph error-text">✕</div><p class="error-text">위치 권한이 거부됐어요. 브라우저 설정에서 허용 후 새로고침 해주세요.</p>';
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
+}
+
+function buildMapCanvas(){
+  const wrap = document.getElementById('mapWrap');
+  const size = Math.min(window.innerWidth - 32, window.innerHeight - 220);
+  wrap.innerHTML = `
+    <canvas id="skyCanvas" width="${size}" height="${size}"></canvas>
+    <div class="readout">
+      <span>위도 <b>${coords.latitude.toFixed(2)}</b></span>
+      <span>경도 <b>${coords.longitude.toFixed(2)}</b></span>
+    </div>
+    <div class="map-caption">중심 = 천정 · 테두리 = 지평선 · 30초마다 갱신</div>
+  `;
+  mapCanvas = document.getElementById('skyCanvas');
+  mapCtx = mapCanvas.getContext('2d');
+  R = size/2 - 26; CX = size/2; CY = size/2;
+  drawSky();
+  setInterval(drawSky, 30000);
+}
+
+function altAzToXY(alt, az){
+  if(alt < 0) return null;
+  const r = R * (1 - alt/90);
+  const theta = (az - 90) * Math.PI/180;
+  return { x: CX + r*Math.cos(theta), y: CY + r*Math.sin(theta) };
+}
+
+function drawSky(){
+  if(!mapCtx || !coords) return;
+  const now = new Date();
+  const ctx = mapCtx;
+  ctx.clearRect(0,0,mapCanvas.width,mapCanvas.height);
+
+  // 배경 원
+  ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2);
+  ctx.fillStyle = '#0b1020'; ctx.fill();
+  ctx.strokeStyle = '#e8c468'; ctx.lineWidth = 1; ctx.globalAlpha=0.5; ctx.stroke(); ctx.globalAlpha=1;
+
+  // 고도 기준선 (30/60도)
+  ctx.strokeStyle = '#1c2544'; ctx.lineWidth=1;
+  [30,60].forEach(a=>{
+    const rr = R*(1-a/90);
+    ctx.beginPath(); ctx.arc(CX,CY,rr,0,Math.PI*2); ctx.stroke();
+  });
+
+  // 방위 라벨
+  ctx.fillStyle = '#7280a3'; ctx.font = '11px JetBrains Mono, monospace'; ctx.textAlign='center';
+  ctx.fillText('N', CX, CY-R-10);
+  ctx.fillText('S', CX, CY+R+18);
+  ctx.fillText('W', CX-R-14, CY+4);
+  ctx.fillText('E', CX+R+14, CY+4);
+
+  const pos = {};
+  STARS.forEach(s=>{
+    const {altitude, azimuth} = raDecToAltAz(s.ra, s.dec, coords.latitude, coords.longitude, now);
+    const xy = altAzToXY(altitude, azimuth);
+    if(xy) pos[s.name] = {...xy, mag:s.mag};
+  });
+
+  // 별자리 선
+  ctx.strokeStyle = '#6f8dff'; ctx.globalAlpha = 0.45; ctx.lineWidth=1;
+  Object.values(LINES).forEach(names=>{
+    for(let i=1;i<names.length;i++){
+      const a = pos[names[i-1]], b = pos[names[i]];
+      if(!a||!b) continue;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+  });
+  ctx.globalAlpha = 1;
+
+  // 별
+  Object.values(pos).forEach(p=>{
+    const r = Math.max(1.2, 3.2 - p.mag*0.5);
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
+    ctx.fillStyle = '#f8fafc'; ctx.fill();
+  });
+
+  // 중심점
+  ctx.beginPath(); ctx.arc(CX,CY,2,0,Math.PI*2); ctx.fillStyle='#e8c468'; ctx.fill();
+}
+
+/* ============ AR 모드 ============ */
+document.getElementById('arBtn').onclick = startAr;
+
+async function requestOrientationPermission(){
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    try{
+      const res = await DeviceOrientationEvent.requestPermission();
+      return res === 'granted';
+    }catch(e){ return false; }
+  }
+  return true; // Android 등은 별도 권한요청 불필요
+}
+
+function onOrientation(e){
+  orientationReady = true;
+  if(e.webkitCompassHeading !== undefined){
+    heading = e.webkitCompassHeading; // iOS: 이미 진북 기준 보정됨
+  } else if(e.alpha !== null){
+    heading = 360 - e.alpha; // Android 근사치
+  }
+  pitch = (e.beta || 0) - 90; // 폰을 세워 든 상태 기준 보정
+  if(pitch < -90) pitch += 180;
+  if(pitch > 90) pitch -= 180;
+}
+
+async function startAr(){
+  const inner = document.getElementById('arInner');
+  try{
+    const orientOk = await requestOrientationPermission();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' }, audio:false });
+    if(!navigator.geolocation){ throw new Error('nogeo'); }
+    navigator.geolocation.getCurrentPosition((pos)=>{
+      coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      buildArCanvas(stream, orientOk);
+    }, ()=>{ buildArCanvas(stream, orientOk); }, { enableHighAccuracy:true, timeout:10000 });
+  }catch(err){
+    inner.innerHTML = '<div class="glyph error-text">✕</div><p class="error-text">카메라 권한을 확인해주세요. HTTPS 환경(또는 localhost)에서만 카메라 접근이 허용돼요.</p>';
+  }
+}
+
+let arRAF = null;
+function buildArCanvas(stream, orientOk){
+  const wrap = document.getElementById('arWrap');
+  wrap.innerHTML = `
+    <video id="arVideo" autoplay playsinline muted></video>
+    <canvas id="arCanvas"></canvas>
+    <div class="ar-crosshair"></div>
+    <div class="ar-hud">
+      <span id="hudHeading">HDG --°</span>
+      <span id="hudPitch">PIT --°</span>
+    </div>
+  `;
+  arVideo = document.getElementById('arVideo');
+  arVideo.srcObject = stream;
+  arCanvas = document.getElementById('arCanvas');
+  arCtx = arCanvas.getContext('2d');
+  arCanvas.width = window.innerWidth; arCanvas.height = window.innerHeight;
+
+  if(orientOk){
+    window.addEventListener('deviceorientation', onOrientation, true);
+  }
+  arRAF = requestAnimationFrame(drawAr);
+}
+
+function stopAr(){
+  if(arRAF) cancelAnimationFrame(arRAF);
+  window.removeEventListener('deviceorientation', onOrientation, true);
+  if(arVideo && arVideo.srcObject){
+    arVideo.srcObject.getTracks().forEach(t=>t.stop());
+  }
+}
+
+function normDeg(d){ let x=d%360; if(x>180)x-=360; if(x<-180)x+=360; return x; }
+
+function drawAr(){
+  if(!arCtx || !coords){ arRAF = requestAnimationFrame(drawAr); return; }
+  const w = arCanvas.width, h = arCanvas.height;
+  const FOV_H = 60, FOV_V = FOV_H * (h/w);
+  arCtx.clearRect(0,0,w,h);
+
+  document.getElementById('hudHeading').textContent = `HDG ${heading.toFixed(0)}°`;
+  document.getElementById('hudPitch').textContent = `PIT ${pitch.toFixed(0)}°`;
+
+  const now = new Date();
+  STARS.forEach(s=>{
+    const {altitude, azimuth} = raDecToAltAz(s.ra, s.dec, coords.latitude, coords.longitude, now);
+    if(altitude < 0) return;
+    const dAz = normDeg(azimuth - heading);
+    const dAlt = altitude - pitch;
+    if(Math.abs(dAz) > FOV_H/2 || Math.abs(dAlt) > FOV_V/2) return;
+    const x = w/2 + (dAz/(FOV_H/2))*(w/2);
+    const y = h/2 - (dAlt/(FOV_V/2))*(h/2);
+    const r = Math.max(1.5, 3.5 - s.mag*0.5);
+    arCtx.beginPath(); arCtx.arc(x,y,r,0,Math.PI*2);
+    arCtx.fillStyle = '#fef9c3'; arCtx.fill();
+    arCtx.fillStyle = 'rgba(254,249,195,0.85)';
+    arCtx.font = '10px JetBrains Mono, monospace';
+    arCtx.fillText(s.name, x+6, y+3);
+  });
+
+  arRAF = requestAnimationFrame(drawAr);
+}
+
+window.addEventListener('resize', ()=>{
+  if(arCanvas){ arCanvas.width = window.innerWidth; arCanvas.height = window.innerHeight; }
+});
+</script>
+</body>
+</html>

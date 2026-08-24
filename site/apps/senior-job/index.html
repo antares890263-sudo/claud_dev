@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>다시, 빛날 시간 · 시니어 인재 프로필</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FBF5E9;
+    --card-1:#FFFFFF;
+    --card-2:#FFF9EE;
+    --ink:#2A2419;
+    --ink-soft:#7A6E58;
+    --teal:#1F5C52;
+    --gold-1:#F6CE7C;
+    --gold-2:#C4791F;
+    --gold-3:#8A5A19;
+    --line:#EBDFC4;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(700px 320px at 12% -8%, rgba(246,206,124,0.28), transparent 60%),
+      radial-gradient(600px 280px at 92% 4%, rgba(196,121,31,0.14), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans KR', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1140px; margin:0 auto; padding:56px 24px 90px;}
+
+  /* ---------- Hero ---------- */
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.14em;
+    color:var(--gold-3); text-transform:uppercase; display:inline-flex; align-items:center; gap:8px; margin-bottom:18px;
+  }
+  .eyebrow svg{flex:none;}
+  h1.hero-title{
+    font-family:'Noto Serif KR', serif; font-weight:900; font-size:clamp(30px, 4.4vw, 52px);
+    line-height:1.28; margin:0 0 18px; max-width:15ch;
+    background:linear-gradient(100deg, var(--ink) 55%, var(--gold-3) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero-sub{font-size:16px; line-height:1.8; color:var(--ink-soft); max-width:56ch; margin:0 0 8px;}
+  .hero-row{display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap; padding-bottom:38px; margin-bottom:34px; border-bottom:1px solid var(--line);}
+  .hero-count{text-align:right; white-space:nowrap;}
+  .hero-count .num{
+    font-family:'Noto Serif KR', serif; font-size:42px; font-weight:900; line-height:1;
+    background:linear-gradient(120deg, var(--gold-2), var(--gold-3));
+    -webkit-background-clip:text; background-clip:text; color:transparent; display:block;
+  }
+  .hero-count .lbl{font-size:12px; color:var(--ink-soft); letter-spacing:.05em;}
+
+  /* ---------- Controls ---------- */
+  .controls{display:flex; gap:16px; align-items:center; margin-bottom:22px; flex-wrap:wrap;}
+  .search-wrap{
+    flex:1 1 320px; display:flex; align-items:center; gap:10px;
+    background:#fff; border:1px solid var(--line); border-radius:999px; padding:12px 18px;
+    box-shadow:0 4px 14px rgba(138,90,25,.06);
+  }
+  .search-wrap:focus-within{border-color:var(--gold-2); box-shadow:0 0 0 3px rgba(196,121,31,.15);}
+  .search-wrap svg{flex:none; opacity:.5;}
+  #searchInput{flex:1; border:none; background:transparent; outline:none; font-family:'Noto Sans KR', sans-serif; font-size:15px; color:var(--ink);}
+  #searchInput::placeholder{color:#B3A688;}
+  .sort-wrap{display:flex; align-items:center; gap:10px; font-size:13px; color:var(--ink-soft);}
+  #sortSelect{font-family:'Noto Sans KR', sans-serif; font-size:14px; padding:10px 14px; border-radius:999px; border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer;}
+  .clear-btn{font-family:'Noto Sans KR', sans-serif; font-size:13px; color:var(--gold-3); background:none; border:1px solid transparent; cursor:pointer; padding:6px 4px; display:none; text-decoration:underline; text-underline-offset:3px;}
+
+  /* ---------- Tag cloud ---------- */
+  .tag-cloud-block{margin-bottom:40px;}
+  .tag-cloud-label{font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em; color:var(--ink-soft); text-transform:uppercase; margin-bottom:12px;}
+  .tag-cloud{display:flex; flex-wrap:wrap; gap:8px 10px;}
+  .tag-pill{
+    font-family:'Noto Sans KR', sans-serif; font-weight:700; border:none; color:var(--gold-3);
+    background:linear-gradient(180deg, #FBEBC9, #F3DBA0); border-radius:20px; padding:6px 15px; cursor:pointer;
+    transition:transform .12s ease, box-shadow .15s ease, background .15s ease, color .15s ease;
+    line-height:1.4; box-shadow:0 2px 0 rgba(138,90,25,.08) inset;
+  }
+  .tag-pill .cnt{opacity:.65; font-weight:500; margin-left:3px;}
+  .tag-pill:hover{transform:translateY(-2px); box-shadow:0 6px 14px rgba(196,121,31,.2);}
+  .tag-pill.active{background:linear-gradient(180deg, var(--teal), #16443D); color:#fff;}
+  .tag-pill:focus-visible, #searchInput:focus-visible, #sortSelect:focus-visible, .card:focus-visible{outline:2px solid var(--gold-2); outline-offset:2px;}
+
+  /* ---------- Grid & Cards ---------- */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(266px, 1fr)); gap:22px;}
+  .card{
+    position:relative; background:linear-gradient(180deg, var(--card-1), var(--card-2));
+    border:1px solid var(--line); border-radius:22px; padding:28px 22px 22px; text-align:center;
+    box-shadow:0 14px 30px rgba(138,90,25,.08); transition:transform .2s ease, box-shadow .2s ease; cursor:pointer;
+  }
+  .card:hover{transform:translateY(-6px); box-shadow:0 22px 40px rgba(138,90,25,.16);}
+
+  .portrait-wrap{position:relative; width:96px; height:96px; margin:0 auto 14px;}
+  .ring{
+    width:96px; height:96px; border-radius:50%; padding:4px;
+    background:conic-gradient(from 180deg, var(--gold-1), var(--gold-2), var(--gold-1));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 4px var(--card-1), 0 10px 22px rgba(196,121,31,.28);
+  }
+  .avatar{width:100%; height:100%; border-radius:50%; overflow:hidden; background:#EFE9DA;}
+  .avatar svg{width:100%; height:100%; display:block;}
+  .spark{position:absolute; right:-2px; bottom:-2px; width:26px; height:26px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(138,90,25,.3);}
+  .spark svg{width:15px; height:15px;}
+
+  .name{font-family:'Noto Serif KR', serif; font-weight:700; font-size:19px; margin-bottom:6px;}
+  .age-pill{display:inline-block; font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--gold-3); background:#FBEFD6; border-radius:999px; padding:3px 12px; margin-bottom:16px;}
+  .tags-row{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:18px;}
+  .stamp{font-size:11.5px; font-weight:700; color:var(--gold-3); background:linear-gradient(180deg, #FBEBC9, #F3DBA0); border-radius:999px; padding:3px 11px; letter-spacing:.01em;}
+  .fields{text-align:left; display:flex; flex-direction:column; gap:8px;}
+  .field-row{display:flex; align-items:center; gap:10px; font-size:13px; background:rgba(196,121,31,0.045); border-radius:12px; padding:9px 12px;}
+  .field-row svg{flex:none; opacity:.75;}
+  .field-row b{font-weight:700; color:var(--ink);}
+  .field-row span.sep{color:var(--ink-soft); margin:0 2px;}
+  .field-row .v{color:var(--ink-soft);}
+  .view-more{margin-top:16px; font-size:12px; color:var(--gold-3); font-weight:700; display:flex; align-items:center; justify-content:center; gap:4px;}
+
+  /* ---------- Empty / footer ---------- */
+  .empty{display:none; border:1.5px dashed var(--line); border-radius:16px; padding:56px 20px; text-align:center; color:var(--ink-soft); font-size:14px;}
+  .empty strong{display:block; font-family:'Noto Serif KR', serif; font-size:19px; color:var(--ink); margin-bottom:8px; font-weight:700;}
+  .count-line{font-size:13px; color:var(--ink-soft); margin-bottom:16px; font-family:'IBM Plex Mono', monospace;}
+  footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:#B0A484; text-align:center;}
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(34,28,17,.55);
+    backdrop-filter:blur(2px); z-index:100; align-items:flex-start; justify-content:center;
+    padding:5vh 20px; overflow-y:auto;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:linear-gradient(180deg,#fff,#FFFAF0); border-radius:26px; max-width:640px; width:100%;
+    padding:36px 34px 32px; position:relative; box-shadow:0 30px 70px rgba(34,28,17,.35);
+    animation:pop .18s ease;
+  }
+  @keyframes pop{from{opacity:0; transform:translateY(10px) scale(.98);} to{opacity:1; transform:none;}}
+  .modal-close{
+    position:absolute; top:18px; right:18px; width:34px; height:34px; border-radius:50%;
+    border:1px solid var(--line); background:#fff; cursor:pointer; font-size:16px; color:var(--ink-soft);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal-close:hover{color:var(--gold-3); border-color:var(--gold-2);}
+  .modal-body{display:flex; gap:30px; flex-wrap:wrap;}
+  .modal-photo-wrap{
+    flex:0 0 220px; margin:0 auto; border-radius:20px; overflow:hidden;
+    background:radial-gradient(120px 220px at 50% 20%, #FFF6DE, #FBEFDD);
+    display:flex; align-items:flex-end; justify-content:center;
+    box-shadow:inset 0 0 0 1px var(--line);
+  }
+  .modal-photo-wrap svg{width:100%; height:auto; display:block;}
+  .modal-info{flex:1 1 280px; min-width:240px;}
+  .modal-name{font-family:'Noto Serif KR', serif; font-weight:900; font-size:26px; margin-bottom:6px;}
+  .modal-age{display:inline-block; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--gold-3); background:#FBEFD6; border-radius:999px; padding:4px 13px; margin-bottom:16px;}
+  .modal-quote{
+    font-size:14.5px; line-height:1.75; color:var(--ink); background:rgba(196,121,31,.07);
+    border-left:3px solid var(--gold-2); border-radius:8px; padding:14px 16px; margin-bottom:8px;
+    min-height:52px;
+  }
+  .ai-tag{
+    display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
+    color:var(--gold-3); background:linear-gradient(180deg,#FBEBC9,#F3DBA0);
+    border-radius:999px; padding:3px 10px; margin-bottom:20px;
+  }
+  .ai-tag svg{width:11px; height:11px;}
+  .ai-loading{display:inline-flex; align-items:center; gap:8px; color:var(--ink-soft); font-style:italic;}
+  .ai-dots{display:inline-flex; gap:3px;}
+  .ai-dots span{width:5px; height:5px; border-radius:50%; background:var(--gold-2); animation:aiBlink 1s infinite ease-in-out;}
+  .ai-dots span:nth-child(2){animation-delay:.15s;}
+  .ai-dots span:nth-child(3){animation-delay:.3s;}
+  @keyframes aiBlink{0%,80%,100%{opacity:.25;} 40%{opacity:1;}}
+  .ai-cursor{display:inline-block; width:2px; height:1em; background:var(--gold-2); margin-left:2px; vertical-align:-2px; animation:aiCursor .8s steps(1) infinite;}
+  @keyframes aiCursor{0%,50%{opacity:1;} 51%,100%{opacity:0;}}
+  .modal-tags{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:20px;}
+  .modal-fields{display:flex; flex-direction:column; gap:10px;}
+  .modal-field-row{display:flex; align-items:center; gap:10px; font-size:14px; background:rgba(196,121,31,0.045); border-radius:12px; padding:11px 14px;}
+  .modal-field-row svg{flex:none; opacity:.8;}
+  .modal-field-row b{font-weight:700;}
+  .modal-field-row .v{color:var(--ink-soft); margin-left:4px;}
+
+  @media (max-width:640px){
+    .hero-row{flex-direction:column; align-items:flex-start;}
+    .hero-count{text-align:left;}
+    .controls{flex-direction:column; align-items:stretch;}
+    .sort-wrap{justify-content:space-between;}
+    .modal-body{flex-direction:column;}
+    .modal-photo-wrap{flex:0 0 auto; max-width:220px;}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
+</style>
+</head>
+<body>
+<div style="position:fixed;top:10px;left:10px;z-index:99999;display:flex;gap:6px;font-family:system-ui,sans-serif;font-size:12px;"><a href="../../" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">← 홈</a><a href="upload.html" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">프로필 등록하기</a></div>
+
+<div class="page">
+
+  <div class="eyebrow">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="var(--gold-2)"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.8 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>
+    잘 살아온 인생, 다시 한 번 빛날 시간
+  </div>
+  <div class="hero-row">
+    <div>
+      <h1 class="hero-title">경험이 쌓일수록<br>더 빛나는 사람들</h1>
+      <p class="hero-sub">한평생 성실하게 살아오신 분들의 이야기입니다. 특기 태그를 눌러보고, 키워드로 검색하고, 카드를 클릭해 자세한 프로필을 만나보세요.</p>
+    </div>
+    <div class="hero-count">
+      <span class="num" id="heroCount">16</span>
+      <span class="lbl">명의 인재가 기다리고 있어요</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label class="search-wrap" for="searchInput">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2A2419" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="searchInput" type="text" placeholder="이름, 특기, 희망 직종으로 검색해보세요">
+    </label>
+    <div class="sort-wrap">
+      <span>정렬</span>
+      <select id="sortSelect">
+        <option value="default">등록순</option>
+        <option value="name">이름순</option>
+        <option value="age-asc">나이 낮은순</option>
+        <option value="age-desc">나이 많은순</option>
+      </select>
+    </div>
+    <button class="clear-btn" id="clearBtn">필터 초기화</button>
+  </div>
+
+  <div class="tag-cloud-block">
+    <div class="tag-cloud-label">특기 태그로 만나보기</div>
+    <div class="tag-cloud" id="tagCloud"></div>
+  </div>
+
+  <div class="count-line" id="countLine">총 16명의 인재</div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="empty" id="emptyState">
+    <strong>조건에 맞는 인재가 없습니다</strong>
+    다른 태그를 선택하거나 검색어를 바꿔보세요.
+  </div>
+
+  <footer>본 페이지의 프로필은 데모용 예시 데이터입니다.</footer>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalName">
+    <button class="modal-close" id="modalClose" aria-label="닫기">✕</button>
+    <div class="modal-body">
+      <div class="modal-photo-wrap" id="modalPhoto"></div>
+      <div class="modal-info">
+        <div class="modal-name" id="modalName"></div>
+        <div class="modal-age" id="modalAge"></div>
+        <p class="modal-quote" id="modalQuote"></p>
+        <div class="ai-tag" id="aiTag">
+          <svg viewBox="0 0 24 24" fill="#C4791F"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.8 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>
+          AI가 자동으로 요약한 소개예요
+        </div>
+        <div class="modal-tags" id="modalTags"></div>
+        <div class="modal-fields" id="modalFields"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const profiles = [
+    {name:"김영자", age:68, tags:["요리","베이킹","위생관리"], job:"급식 보조", time:"평일 오전", address:"서울 성북구 정릉동", phone:"010-2231-5567"},
+    {name:"박길수", age:71, tags:["운전","물류","성실"], job:"택배/배송", time:"평일 전일", address:"경기 부천시 원미구", phone:"010-4482-1190"},
+    {name:"이순희", age:65, tags:["돌봄","육아경험","인내심"], job:"시니어 돌봄", time:"평일 오후", address:"서울 은평구 불광동", phone:"010-6673-2284"},
+    {name:"최만수", age:73, tags:["목공","수리","설비"], job:"시설관리", time:"평일 오전", address:"인천 남동구 구월동", phone:"010-3395-7712"},
+    {name:"정옥분", age:62, tags:["상담","경청","심리"], job:"고객상담", time:"평일 오후", address:"서울 마포구 망원동", phone:"010-8814-3326"},
+    {name:"강태호", age:69, tags:["경비","보안","체력"], job:"시설경비", time:"야간 가능", address:"경기 고양시 일산동구", phone:"010-5567-4419"},
+    {name:"윤미경", age:60, tags:["컴퓨터","엑셀","문서작성"], job:"사무보조", time:"평일 오전", address:"서울 강서구 화곡동", phone:"010-2298-6651"},
+    {name:"서동진", age:75, tags:["원예","조경","식물관리"], job:"공원관리", time:"평일 전일", address:"경기 성남시 수정구", phone:"010-7734-9982"},
+    {name:"한복순", age:66, tags:["바느질","수선","꼼꼼함"], job:"의류수선", time:"평일 오후", address:"서울 동대문구 장안동", phone:"010-4419-2258"},
+    {name:"임재석", age:64, tags:["통역","영어","무역"], job:"통번역", time:"협의 가능", address:"서울 서초구 반포동", phone:"010-9921-3345"},
+    {name:"조남희", age:70, tags:["청소","정리정돈","위생관리"], job:"환경미화", time:"평일 오전", address:"경기 안양시 만안구", phone:"010-3312-8867"},
+    {name:"배순영", age:58, tags:["제빵","카페","서비스"], job:"카페 보조", time:"주말 가능", address:"서울 광진구 자양동", phone:"010-6645-1123"},
+    {name:"문경식", age:72, tags:["운전","지리","안전운전"], job:"셔틀버스", time:"평일 오전", address:"경기 용인시 수지구", phone:"010-8873-4456"},
+    {name:"신말자", age:67, tags:["상담","전화응대","친절"], job:"콜센터", time:"평일 오후", address:"서울 노원구 상계동", phone:"010-2267-9931"},
+    {name:"오철민", age:74, tags:["경비","야간근무","책임감"], job:"아파트 관리", time:"야간 가능", address:"인천 부평구 산곡동", phone:"010-5541-6678"},
+    {name:"유정희", age:61, tags:["컴퓨터","교육","강의"], job:"디지털 교육강사", time:"평일 전일", address:"서울 송파구 잠실동", phone:"010-3398-2214"},
+  ].map((p, i) => ({...p, id: i + 1}));
+
+  // --- 시드/공용 팔레트 ---
+  const SKIN   = ["#E8B88A","#D9A066","#C68642","#F0C9A0","#DDAE7E"];
+  const HAIR   = ["#8B8B8B","#E8E6E1","#3A2E28","#6B5B4F","#B5AFA6","#54473C"];
+  const BGTINT = ["#FBEFD9","#F3E9DB","#FBE7D4","#F4ECD9","#F6EAD6"];
+  const COLLAR = ["#1F5C52","#C4791F","#9E4636","#5B6B3F","#3A5A78","#8A5A19"];
+  const PANTS  = ["#3A3A3A","#4B4237","#565049","#39474A","#453B2E"];
+
+  function seedOf(str){
+    let h = 0;
+    for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return h;
+  }
+
+  function traitsOf(p){
+    const h = seedOf(p.name);
+    return {
+      skin: SKIN[h % SKIN.length],
+      hair: HAIR[(h >> 2) % HAIR.length],
+      style: (h >> 4) % 5,
+      glasses: (h >> 6) % 3 === 0,
+      bg: BGTINT[(h >> 8) % BGTINT.length],
+      collar: COLLAR[(h >> 10) % COLLAR.length],
+      pants: PANTS[(h >> 12) % PANTS.length],
+    };
+  }
+
+  function hairShape(style, hair){
+    switch(style){
+      case 0:
+        return `<path d="M16 27 Q16 9 32 9 Q48 9 48 27 Q48 17 32 17 Q16 17 16 27 Z" fill="${hair}"/>`;
+      case 1:
+        return `<path d="M16 27 Q16 9 34 9 Q49 10 48 24 Q44 15 30 16 Q18 17 16 27 Z" fill="${hair}"/>`;
+      case 2:
+        return `<path d="M16 26 Q17 10 32 10 Q47 10 47 26 Q47 18 32 18 Q17 18 16 26 Z" fill="${hair}"/><circle cx="32" cy="8" r="5.5" fill="${hair}"/>`;
+      case 3:
+        return `<path d="M17 23 Q17 15 22 12 M47 23 Q47 15 42 12 M22 12 Q32 8 42 12" stroke="${hair}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`;
+      default:
+        return `<path d="M15 28 Q14 9 32 9 Q50 9 49 28 Q49 20 44 22 Q46 15 40 15 Q34 12 28 15 Q20 14 20 22 Q17 20 15 28 Z" fill="${hair}"/>`;
+    }
+  }
+
+  function glassesMarkup(glasses){
+    if (!glasses) return "";
+    return `
+      <circle cx="25.5" cy="30" r="6" fill="none" stroke="#3A342A" stroke-width="1.5"/>
+      <circle cx="38.5" cy="30" r="6" fill="none" stroke="#3A342A" stroke-width="1.5"/>
+      <line x1="31.5" y1="30" x2="32.5" y2="30" stroke="#3A342A" stroke-width="1.5"/>
+      <line x1="19.5" y1="29" x2="16.5" y2="27" stroke="#3A342A" stroke-width="1.5"/>
+      <line x1="44.5" y1="29" x2="47.5" y2="27" stroke="#3A342A" stroke-width="1.5"/>`;
+  }
+
+  function faceMarkup(t){
+    return `
+      <ellipse cx="16" cy="30" rx="3" ry="4" fill="${t.skin}"/>
+      <ellipse cx="48" cy="30" rx="3" ry="4" fill="${t.skin}"/>
+      <ellipse cx="32" cy="29" rx="15" ry="17" fill="${t.skin}"/>
+      ${hairShape(t.style, t.hair)}
+      ${glassesMarkup(t.glasses)}
+      <ellipse cx="26" cy="22" rx="8" ry="5" fill="#FFFFFF" opacity="0.14"/>`;
+  }
+
+  function portraitSVG(p){
+    const t = traitsOf(p);
+    return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${p.name} 프로필 일러스트">
+      <rect width="64" height="64" fill="${t.bg}"/>
+      <path d="M4 66 Q32 44 60 66 Z" fill="${t.collar}"/>
+      <rect x="27" y="38" width="10" height="10" fill="${t.skin}"/>
+      ${faceMarkup(t)}
+    </svg>`;
+  }
+
+  // --- 직종별 복장 카테고리 ---
+  function outfitOf(p){
+    const bag = (p.tags.join(" ") + " " + p.job);
+    const has = (arr) => arr.some(k => bag.includes(k));
+    if (has(["요리","베이킹","제빵","카페"])) return "chef";
+    if (has(["운전","셔틀버스","물류","택배","경비","보안","야간근무","시설경비","아파트"])) return "uniform";
+    if (has(["컴퓨터","사무","엑셀","문서작성","교육","강의","통역","상담","전화응대","콜센터","무역"])) return "business";
+    if (has(["목공","수리","설비","원예","조경","청소","정리정돈","환경미화","공원"])) return "outdoor";
+    if (has(["돌봄","육아경험","바느질","수선","꼼꼼함","인내심"])) return "care";
+    return "default";
+  }
+
+  function outfitOverlay(kind, t){
+    switch(kind){
+      case "chef": return `
+        <ellipse cx="80" cy="19" rx="22" ry="11" fill="#FFFFFF"/>
+        <rect x="60" y="25" width="40" height="9" rx="4" fill="#FFFFFF"/>
+        <path d="M64 100 L96 100 L100 178 L60 178 Z" fill="#F7F2E7"/>
+        <line x1="66" y1="100" x2="58" y2="92" stroke="#E4D9BC" stroke-width="3" stroke-linecap="round"/>
+        <line x1="94" y1="100" x2="102" y2="92" stroke="#E4D9BC" stroke-width="3" stroke-linecap="round"/>
+        <rect x="58" y="146" width="44" height="6" rx="3" fill="#E4D9BC"/>`;
+      case "uniform": return `
+        <path d="M56 36 Q80 16 104 36 L104 42 Q80 32 56 42 Z" fill="${t.collar}"/>
+        <rect x="96" y="34" width="16" height="8" rx="2" fill="${t.collar}"/>
+        <path d="M50 96 L110 96 L106 178 L54 178 Z" fill="${t.collar}" opacity="0.92"/>
+        <rect x="50" y="128" width="60" height="7" fill="#FFD86B"/>`;
+      case "business": return `
+        <path d="M72 92 L80 110 L88 92 Z" fill="#FFFFFF"/>
+        <path d="M64 96 L80 130 L96 96" fill="none" stroke="${t.collar}" stroke-width="2.5" opacity="0.55"/>
+        <circle cx="80" cy="142" r="2.2" fill="${t.collar}"/>
+        <circle cx="80" cy="158" r="2.2" fill="${t.collar}"/>`;
+      case "outdoor": return `
+        <path d="M52 98 L108 98 L104 175 L56 175 Z" fill="${t.collar}" opacity="0.85"/>
+        <rect x="66" y="128" width="20" height="16" rx="2" fill="#00000020"/>
+        <rect x="50" y="128" width="60" height="6" fill="#F6CE7C" opacity="0.85"/>`;
+      case "care": return `
+        <path d="M60 96 Q80 112 100 96" fill="none" stroke="${t.collar}" stroke-width="2.5" opacity="0.5"/>
+        <line x1="80" y1="98" x2="80" y2="176" stroke="${t.collar}" stroke-width="2" opacity="0.6"/>
+        <circle cx="80" cy="116" r="2.2" fill="${t.collar}"/>
+        <circle cx="80" cy="136" r="2.2" fill="${t.collar}"/>
+        <circle cx="80" cy="156" r="2.2" fill="${t.collar}"/>`;
+      default: return "";
+    }
+  }
+
+  function fullBodySVG(p){
+    const t = traitsOf(p);
+    const kind = outfitOf(p);
+    return `<svg viewBox="0 0 160 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${p.name} 전신 프로필 일러스트">
+      <defs>
+        <radialGradient id="glow-${p.id}" cx="50%" cy="24%" r="72%">
+          <stop offset="0%" stop-color="#FFF6DE"/>
+          <stop offset="100%" stop-color="#FBEFDD"/>
+        </radialGradient>
+        <radialGradient id="spot-${p.id}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#F6CE7C" stop-opacity="0.85"/>
+          <stop offset="100%" stop-color="#F6CE7C" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="160" height="300" fill="url(#glow-${p.id})"/>
+      <ellipse cx="80" cy="275" rx="62" ry="14" fill="url(#spot-${p.id})"/>
+
+      <path d="M12 2l2 6h6l-5 4 2 6-5-4-5 4 2-6-5-4h6z" fill="#F6CE7C" opacity="0.85" transform="translate(6,6) scale(0.8)"/>
+      <path d="M12 2l2 6h6l-5 4 2 6-5-4-5 4 2-6-5-4h6z" fill="#F6CE7C" opacity="0.7" transform="translate(128,30) scale(0.6)"/>
+
+      <!-- legs -->
+      <rect x="58" y="176" width="18" height="76" rx="8" fill="${t.pants}"/>
+      <rect x="84" y="176" width="18" height="76" rx="8" fill="${t.pants}"/>
+      <!-- shoes -->
+      <rect x="53" y="246" width="27" height="14" rx="6" fill="#2A241C"/>
+      <rect x="80" y="246" width="27" height="14" rx="6" fill="#2A241C"/>
+
+      <!-- arms -->
+      <rect x="30" y="98" width="19" height="66" rx="9.5" fill="${t.collar}" transform="rotate(-8 40 98)"/>
+      <ellipse cx="35" cy="168" rx="8.5" ry="9.5" fill="${t.skin}"/>
+      <rect x="112" y="98" width="19" height="56" rx="9.5" fill="${t.collar}" transform="rotate(20 122 98)"/>
+      <ellipse cx="116" cy="152" rx="8.5" ry="9.5" fill="${t.skin}"/>
+
+      <!-- torso -->
+      <rect x="48" y="92" width="64" height="92" rx="20" fill="${t.collar}"/>
+
+      <!-- neck -->
+      <rect x="72" y="68" width="16" height="26" fill="${t.skin}"/>
+
+      <!-- outfit overlay -->
+      ${outfitOverlay(kind, t)}
+
+      <!-- head -->
+      <g transform="translate(53,30) scale(0.85)">
+        ${faceMarkup(t)}
+      </g>
+    </svg>`;
+  }
+
+  const briefcaseIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A5A19" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+  const clockIcon     = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A5A19" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`;
+  const sparkIcon      = `<svg viewBox="0 0 24 24" fill="#C4791F"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.8 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>`;
+  const mapPinIcon     = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A5A19" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+  const phoneIcon      = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A5A19" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+
+  function prideQuote(p){
+    return `오랫동안 ${p.tags[0]} 분야에서 성실히 쌓아온 실력을, 이제 ${p.job} 자리에서 계속 이어가고 싶습니다.`;
+  }
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function renderAIQuote(el, tagEl, text){
+    if (reduceMotion){
+      el.textContent = text;
+      tagEl.style.opacity = "1";
+      return;
+    }
+    tagEl.style.opacity = "0";
+    el.innerHTML = `<span class="ai-loading"><span class="ai-dots"><span></span><span></span><span></span></span> AI가 이 분의 강점을 분석하고 있어요</span>`;
+    setTimeout(() => {
+      el.textContent = "";
+      const cursor = document.createElement("span");
+      cursor.className = "ai-cursor";
+      el.appendChild(cursor);
+      let i = 0;
+      const timer = setInterval(() => {
+        i++;
+        el.textContent = text.slice(0, i);
+        el.appendChild(cursor);
+        if (i >= text.length){
+          clearInterval(timer);
+          cursor.remove();
+          tagEl.style.transition = "opacity .3s ease";
+          tagEl.style.opacity = "1";
+        }
+      }, 22);
+    }, 700);
+  }
+
+  let searchTerm = "";
+  let selectedTags = new Set();
+  let sortBy = "default";
+
+  function allTagCounts(){
+    const counts = {};
+    profiles.forEach(p => p.tags.forEach(t => counts[t] = (counts[t]||0) + 1));
+    return Object.entries(counts).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
+  }
+
+  function renderTagCloud(){
+    const cloud = document.getElementById("tagCloud");
+    const counts = allTagCounts();
+    cloud.innerHTML = counts.map(([tag, cnt]) => {
+      const size = 12 + Math.min(cnt, 4) * 1.5;
+      const active = selectedTags.has(tag) ? "active" : "";
+      return `<button type="button" class="tag-pill ${active}" style="font-size:${size}px" data-tag="${tag}" aria-pressed="${selectedTags.has(tag)}">#${tag}<span class="cnt">${cnt}</span></button>`;
+    }).join("");
+    cloud.querySelectorAll(".tag-pill").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tag = btn.dataset.tag;
+        selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
+        renderAll();
+      });
+    });
+  }
+
+  function getFiltered(){
+    let list = profiles.filter(p => {
+      const haystack = (p.name + " " + p.tags.join(" ") + " " + p.job).toLowerCase();
+      const matchesSearch = !searchTerm || haystack.includes(searchTerm.toLowerCase());
+      const matchesTags = [...selectedTags].every(t => p.tags.includes(t));
+      return matchesSearch && matchesTags;
+    });
+
+    if (sortBy === "name") list.sort((a,b) => a.name.localeCompare(b.name, "ko"));
+    else if (sortBy === "age-asc") list.sort((a,b) => a.age - b.age);
+    else if (sortBy === "age-desc") list.sort((a,b) => b.age - a.age);
+    else list.sort((a,b) => a.id - b.id);
+
+    return list;
+  }
+
+  function cardHTML(p){
+    return `
+    <article class="card" tabindex="0" data-id="${p.id}" role="button" aria-haspopup="dialog">
+      <div class="portrait-wrap">
+        <div class="ring"><div class="avatar">${portraitSVG(p)}</div></div>
+        <div class="spark">${sparkIcon}</div>
+      </div>
+      <div class="name">${p.name}</div>
+      <div class="age-pill">${p.age}세</div>
+      <div class="tags-row">
+        ${p.tags.map(t => `<span class="stamp">#${t}</span>`).join("")}
+      </div>
+      <div class="fields">
+        <div class="field-row">${briefcaseIcon}<span><b>희망 직종</b><span class="sep">·</span><span class="v">${p.job}</span></span></div>
+        <div class="field-row">${clockIcon}<span><b>가능 시간</b><span class="sep">·</span><span class="v">${p.time}</span></span></div>
+      </div>
+      <div class="view-more">전체 프로필 보기 →</div>
+    </article>`;
+  }
+
+  function renderAll(){
+    const list = getFiltered();
+    document.getElementById("grid").innerHTML = list.map(cardHTML).join("");
+    document.getElementById("emptyState").style.display = list.length === 0 ? "block" : "none";
+    document.getElementById("grid").style.display = list.length === 0 ? "none" : "grid";
+    document.getElementById("countLine").textContent = `총 ${list.length}명의 인재`;
+    document.getElementById("clearBtn").style.display = (searchTerm || selectedTags.size) ? "inline-block" : "none";
+    renderTagCloud();
+
+    document.querySelectorAll(".card").forEach(card => {
+      card.addEventListener("click", () => openModal(Number(card.dataset.id)));
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(Number(card.dataset.id)); }
+      });
+    });
+  }
+
+  // ---------- Modal ----------
+  const backdrop = document.getElementById("modalBackdrop");
+
+  function openModal(id){
+    const p = profiles.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById("modalPhoto").innerHTML = fullBodySVG(p);
+    document.getElementById("modalName").textContent = p.name;
+    document.getElementById("modalAge").textContent = `${p.age}세`;
+    document.getElementById("modalQuote").textContent = "";
+    document.getElementById("aiTag").style.opacity = "0";
+    renderAIQuote(document.getElementById("modalQuote"), document.getElementById("aiTag"), prideQuote(p));
+    document.getElementById("modalTags").innerHTML = p.tags.map(t => `<span class="stamp">#${t}</span>`).join("");
+    document.getElementById("modalFields").innerHTML = `
+      <div class="modal-field-row">${briefcaseIcon}<span><b>희망 직종</b><span class="v">${p.job}</span></span></div>
+      <div class="modal-field-row">${clockIcon}<span><b>가능 시간</b><span class="v">${p.time}</span></span></div>
+      <div class="modal-field-row">${mapPinIcon}<span><b>거주 지역</b><span class="v">${p.address}</span></span></div>
+      <div class="modal-field-row">${phoneIcon}<span><b>연락처</b><span class="v">${p.phone}</span></span></div>
+    `;
+    backdrop.classList.add("open");
+    document.body.style.overflow = "hidden";
+    document.getElementById("modalClose").focus();
+  }
+
+  function closeModal(){
+    backdrop.classList.remove("open");
+    document.body.style.overflow = "";
+  }
+
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(); });
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && backdrop.classList.contains("open")) closeModal(); });
+
+  document.getElementById("searchInput").addEventListener("input", (e) => { searchTerm = e.target.value; renderAll(); });
+  document.getElementById("sortSelect").addEventListener("change", (e) => { sortBy = e.target.value; renderAll(); });
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    searchTerm = ""; selectedTags.clear();
+    document.getElementById("searchInput").value = "";
+    renderAll();
+  });
+
+  document.getElementById("heroCount").textContent = profiles.length;
+  renderAll();
+</script>
+</body>
+</html>
