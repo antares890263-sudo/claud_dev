@@ -825,6 +825,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
     height: 360px; border:1.5px solid var(--ink); border-radius: var(--radius);
     filter: sepia(8%) saturate(0.9);
   }
+  .map-wrap{ position:relative; }
+  .follow-btn{
+    position:absolute; right:10px; bottom:10px; z-index:500;
+    width:44px; height:44px; border-radius:50%; border:1.5px solid var(--ink);
+    background:#fff; color:var(--ink-soft); display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.2); cursor:pointer; touch-action:manipulation;
+  }
+  .follow-btn.active{ background:var(--sky); color:#fff; border-color:var(--sky); }
+  .accuracy-pulse{ animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:0.35; } 50%{ opacity:0.15; } }
 
   .chart-wrap{
     position:relative; height:190px; margin-top:16px;
@@ -855,8 +865,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </style>
 </head>
 <body>
-<div style="position:fixed;top:10px;left:10px;z-index:99999;font-family:system-ui,sans-serif;font-size:12px;"><a href="../../" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">← 홈</a></div>
-
 
 <header>
   <div class="brand">
@@ -889,7 +897,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
 
       <div id="gpsControls">
-        <p class="hint">기기의 위치 센서를 이용해 트랙 위에서 가장 가까운 지점을 실시간으로 찾습니다. GPS 신호가 잡히는 야외에서 가장 정확합니다.</p>
+        <p class="hint">기기의 위치 센서로 실시간 내 위치(파란 점)를 표시하고, 지도가 자동으로 따라갑니다. 트랙 위 가장 가까운 지점(빨간 점)도 함께 보여줍니다. 지도를 직접 움직이면 자동 추적이 잠시 꺼지며, 오른쪽 아래 버튼으로 다시 켤 수 있습니다.</p>
         <button class="action" id="startGpsBtn">위치 추적 시작</button>
         <div class="status-line" id="gpsStatus"></div>
       </div>
@@ -915,7 +923,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="stat"><div class="label">진행률</div><div class="value" id="statProg">–</div></div>
     </div>
 
-    <div id="map"></div>
+    <div class="map-wrap">
+      <div id="map"></div>
+      <button id="followBtn" class="follow-btn" title="내 위치로" style="display:none;">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+        </svg>
+      </button>
+    </div>
     <div class="status-line" id="mapStatus"></div>
 
     <div class="chart-wrap">
@@ -971,6 +987,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   let points = [];        // {lat, lon, ele, dist}
   let totalDist = 0, totalGain = 0;
   let map, trackLine, posMarker, hoverMarker;
+  let liveMarker = null, accuracyCircle = null;
+  let followMode = true;
+  let wakeLock = null;
   let chart;
   let watchId = null;
   let mode = 'gps';
@@ -1163,6 +1182,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
       highlightHoverIndex(idx);
       showHoverMarker(point, false);
     });
+
+    // Manual dragging (real user gesture, not programmatic panTo) turns off auto-follow.
+    map.on('dragstart', () => setFollowMode(false));
+
+    const followBtn = document.getElementById('followBtn');
+    followBtn.addEventListener('click', () => {
+      setFollowMode(true);
+      if (liveMarker) map.setView(liveMarker.getLatLng(), Math.max(map.getZoom(), 16));
+    });
+  }
+
+  function setFollowMode(on){
+    followMode = on;
+    const followBtn = document.getElementById('followBtn');
+    if (followBtn) followBtn.classList.toggle('active', on);
   }
 
   function showHoverMarker(pt, fromMap){
@@ -1345,12 +1379,61 @@ svg.leaflet-image-layer.leaflet-interactive path {
     mode = 'alt';
     modeAltBtn.classList.add('active'); modeGpsBtn.classList.remove('active');
     altControls.style.display = ''; gpsControls.style.display = 'none';
-    if (watchId !== null){ navigator.geolocation.clearWatch(watchId); watchId = null; startGpsBtn.textContent = '위치 추적 시작'; }
+    if (watchId !== null){
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      startGpsBtn.textContent = '위치 추적 시작';
+      clearLiveMarker();
+      releaseWakeLock();
+      document.getElementById('followBtn').style.display = 'none';
+    }
   });
 
   // ---------- GPS mode ----------
   const startGpsBtn = document.getElementById('startGpsBtn');
   const gpsStatus = document.getElementById('gpsStatus');
+
+  async function requestWakeLock(){
+    try {
+      if ('wakeLock' in navigator){
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+    } catch (e){ /* not supported / denied — tracking still works, screen may sleep */ }
+  }
+  function releaseWakeLock(){
+    if (wakeLock){ wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && watchId !== null) requestWakeLock();
+  });
+
+  function updateLiveMarker(lat, lon, accuracy){
+    const latlng = [lat, lon];
+    if (!liveMarker){
+      liveMarker = L.circleMarker(latlng, {
+        radius: 8, color: '#fff', weight: 3, fillColor: '#3D6E8F', fillOpacity: 1
+      }).addTo(map);
+    } else {
+      liveMarker.setLatLng(latlng);
+    }
+    if (accuracy){
+      if (!accuracyCircle){
+        accuracyCircle = L.circle(latlng, {
+          radius: accuracy, color: '#3D6E8F', weight: 1, fillColor: '#3D6E8F', fillOpacity: 0.12, className: 'accuracy-pulse'
+        }).addTo(map);
+      } else {
+        accuracyCircle.setLatLng(latlng);
+        accuracyCircle.setRadius(accuracy);
+      }
+    }
+    if (followMode) map.setView(latlng, Math.max(map.getZoom(), 15), { animate: true });
+  }
+
+  function clearLiveMarker(){
+    if (liveMarker){ map.removeLayer(liveMarker); liveMarker = null; }
+    if (accuracyCircle){ map.removeLayer(accuracyCircle); accuracyCircle = null; }
+  }
 
   startGpsBtn.addEventListener('click', () => {
     if (points.length === 0){ alert('먼저 GPX 파일을 업로드하세요.'); return; }
@@ -1364,11 +1447,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
       watchId = null;
       startGpsBtn.textContent = '위치 추적 시작';
       gpsStatus.textContent = '추적을 중지했습니다.';
+      clearLiveMarker();
+      releaseWakeLock();
+      document.getElementById('followBtn').style.display = 'none';
       return;
     }
     startGpsBtn.textContent = '위치 추적 중지';
+    document.getElementById('followBtn').style.display = 'flex';
+    setFollowMode(true);
+    requestWakeLock();
     watchId = navigator.geolocation.watchPosition(pos => {
       const { latitude, longitude, altitude, accuracy } = pos.coords;
+      updateLiveMarker(latitude, longitude, accuracy);
       const { point, idx, offset } = findNearestByLatLon(latitude, longitude);
       updateForMatchedPoint(point, idx);
       gpsStatus.classList.remove('warn');
