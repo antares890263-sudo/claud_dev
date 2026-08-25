@@ -1,0 +1,8 @@
+name = "gpx-pace-planner"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# 배포 후:
+#   wrangler secret put ANTHROPIC_API_KEY
+# 를 실행해서 API 키를 서버 쪽에만 안전하게 저장하세요.
+# (이 파일에 키를 직접 적지 마세요 — 저장소에 커밋되면 유출됩니다.)
