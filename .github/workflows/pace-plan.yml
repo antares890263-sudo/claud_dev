@@ -1,0 +1,80 @@
+name: Generate Race Pace Plan (internal Ollama)
+
+# 이 워크플로우는 self-hosted 러너(사내망, Ollama가 설치된 서버)에서만 실행됩니다.
+# 실행 방법: 저장소에 race-input.json을 커밋한 뒤, Actions 탭 → 이 워크플로우 → "Run workflow" 클릭.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ollama_url:
+        description: "Ollama 서버 주소 (러너 로컬에서 접근 가능한 주소)"
+        required: false
+        default: "http://localhost:11434"
+      ollama_model:
+        description: "사용할 모델 (미리 ollama pull로 받아둔 모델 이름)"
+        required: false
+        default: "qwen2.5:7b"
+      input_file:
+        description: "입력 파일 경로 (트래커 앱에서 내보낸 JSON)"
+        required: false
+        default: "race-input.json"
+      output_file:
+        description: "결과를 저장할 경로 (Pages로 서빙되는 위치)"
+        required: false
+        default: "race-plan.json"
+
+jobs:
+  generate-plan:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check input file exists
+        run: |
+          if [ ! -f "${{ inputs.input_file }}" ]; then
+            echo "::error::${{ inputs.input_file }} 파일이 저장소에 없습니다. 트래커 앱에서 내보낸 뒤 먼저 커밋하세요."
+            exit 1
+          fi
+          cat "${{ inputs.input_file }}"
+
+      - name: Build prompt and call Ollama
+        run: |
+          set -e
+          INPUT_JSON=$(cat "${{ inputs.input_file }}")
+
+          SYSTEM_PROMPT='너는 트레일 러닝 페이스 코치다. 사용자가 업로드한 GPX 코스를 구간으로 나눈 데이터와, 사용자의 목표/컨디션을 받는다. 각 구간마다 목표 페이스(분/km)와 목표 통과 누적시간(초), 그리고 한 줄짜리 코칭 코멘트를 만들어야 한다. 규칙: 오르막 구간은 경사도에 비례해 페이스가 느려져야 한다(Grade-Adjusted Pace 개념 참고). 내리막이 너무 가파르면(예: -15% 이상) 부상 위험 때문에 무리하게 빠른 페이스를 주지 않는다. 레이스 초반 구간은 사용자가 목표 페이스보다 오버페이스하지 않도록 보수적으로 잡는다. 반드시 지정된 JSON 스키마로만 응답한다. 다른 텍스트, 설명, 마크다운을 절대 포함하지 않는다. 스키마: {"segments": [{"index": 0, "target_pace_min_per_km": 6.2, "target_cumulative_seconds": 372, "note": "짧은 코멘트"}], "overall_note": "전체 코멘트"}'
+
+          # jq로 안전하게 JSON 조립 (프롬프트/입력에 특수문자가 있어도 깨지지 않도록)
+          PAYLOAD=$(jq -n \
+            --arg model "${{ inputs.ollama_model }}" \
+            --arg system "$SYSTEM_PROMPT" \
+            --argjson input "$INPUT_JSON" \
+            '{
+              model: $model,
+              prompt: ($system + "\n\n사용자 데이터:\n" + ($input | tostring)),
+              stream: false,
+              format: "json"
+            }')
+
+          echo "Ollama 호출 중... (${{ inputs.ollama_url }}, 모델: ${{ inputs.ollama_model }})"
+          RESPONSE=$(curl -sS -X POST "${{ inputs.ollama_url }}/api/generate" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          # Ollama 응답의 .response 필드 안에 실제 JSON 문자열이 들어있음
+          echo "$RESPONSE" | jq -r '.response' > "${{ inputs.output_file }}"
+
+          echo "----- 생성된 페이스 계획 -----"
+          cat "${{ inputs.output_file }}"
+
+          # 결과가 유효한 JSON인지 검증 (아니면 워크플로우 실패 처리)
+          jq empty "${{ inputs.output_file }}"
+
+      - name: Commit and push result
+        run: |
+          git config user.name "pace-plan-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add "${{ inputs.output_file }}"
+          git diff --cached --quiet && echo "변경 없음, 커밋 생략" && exit 0
+          git commit -m "chore: update race pace plan"
+          git push
