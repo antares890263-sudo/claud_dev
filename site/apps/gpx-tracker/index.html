@@ -823,9 +823,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   #map{
     height: 360px; border:1.5px solid var(--ink); border-radius: var(--radius);
-    filter: sepia(8%) saturate(0.9);
   }
   .map-wrap{ position:relative; }
+  .map-style-switcher{
+    position:absolute; left:10px; top:10px; z-index:500;
+    display:flex; background:#fff; border:1.5px solid var(--ink); border-radius:999px; overflow:hidden;
+    box-shadow:0 2px 6px rgba(0,0,0,0.15);
+  }
+  .map-style-btn{
+    border:none; background:transparent; padding:7px 12px; font-family:'IBM Plex Mono',monospace;
+    font-size:11px; color:var(--ink-soft); cursor:pointer; touch-action:manipulation;
+  }
+  .map-style-btn.active{ background:var(--forest); color:#fff; }
   .follow-btn{
     position:absolute; right:10px; bottom:10px; z-index:500;
     width:44px; height:44px; border-radius:50%; border:1.5px solid var(--ink);
@@ -1034,6 +1043,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     <div class="map-wrap">
       <div id="map"></div>
+      <div class="map-style-switcher">
+        <button class="map-style-btn active" data-style="standard">일반</button>
+        <button class="map-style-btn" data-style="topo">지형도</button>
+        <button class="map-style-btn" data-style="satellite">위성</button>
+      </div>
       <button id="followBtn" class="follow-btn" title="내 위치로" style="display:none;">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -1229,25 +1243,43 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
 
   // ---------- map ----------
-  const TILE_PROVIDERS = [
-    { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', maxZoom: 17, subdomains: 'abc', label: 'OpenTopoMap', attribution: '&copy; OpenTopoMap, &copy; OpenStreetMap contributors' },
-    { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, subdomains: 'abc', label: 'OpenStreetMap', attribution: '&copy; OpenStreetMap contributors' },
-    { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', maxZoom: 20, subdomains: 'abcd', label: 'CARTO Voyager', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }
-  ];
+  const TILE_STYLES = {
+    standard: {
+      label: '일반',
+      providers: [
+        { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', maxZoom: 20, subdomains: 'abcd', label: 'CARTO Voyager', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
+        { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, subdomains: 'abc', label: 'OpenStreetMap', attribution: '&copy; OpenStreetMap contributors' }
+      ]
+    },
+    topo: {
+      label: '지형도',
+      providers: [
+        { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', maxZoom: 17, subdomains: 'abc', label: 'OpenTopoMap', attribution: '&copy; OpenTopoMap, &copy; OpenStreetMap contributors' }
+      ]
+    },
+    satellite: {
+      label: '위성',
+      providers: [
+        { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 19, label: 'Esri World Imagery', attribution: '&copy; Esri, Maxar, Earthstar Geographics' }
+      ]
+    }
+  };
+  let currentStyleKey = 'standard';
   let tileProviderIdx = 0;
   let currentTileLayer = null;
   let tileErrorCount = 0;
   let tileLoadedOk = false;
   const mapStatusEl = () => document.getElementById('mapStatus');
 
-  function addTileLayer(idx){
+  function addTileLayer(styleKey, idx){
     if (currentTileLayer){ map.removeLayer(currentTileLayer); }
-    const p = TILE_PROVIDERS[idx];
+    const providers = TILE_STYLES[styleKey].providers;
+    const p = providers[idx];
     tileErrorCount = 0;
     tileLoadedOk = false;
     currentTileLayer = L.tileLayer(p.url, {
       maxZoom: p.maxZoom,
-      subdomains: p.subdomains,
+      subdomains: p.subdomains || 'abc',
       attribution: p.attribution,
       crossOrigin: true
     });
@@ -1258,10 +1290,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     currentTileLayer.on('tileerror', () => {
       tileErrorCount++;
       if (!tileLoadedOk && tileErrorCount >= 6){
-        if (tileProviderIdx < TILE_PROVIDERS.length - 1){
-          tileProviderIdx++;
-          if (mapStatusEl()) mapStatusEl().textContent = `지도 배경(${p.label})을 불러오지 못해 ${TILE_PROVIDERS[tileProviderIdx].label}로 전환합니다…`;
-          addTileLayer(tileProviderIdx);
+        if (idx < providers.length - 1){
+          tileProviderIdx = idx + 1;
+          if (mapStatusEl()) mapStatusEl().textContent = `지도 배경(${p.label})을 불러오지 못해 ${providers[tileProviderIdx].label}로 전환합니다…`;
+          addTileLayer(styleKey, tileProviderIdx);
         } else if (mapStatusEl()){
           mapStatusEl().textContent = '지도 배경 타일을 불러올 수 없습니다 (네트워크에서 지도 서버가 차단되었을 수 있음). 트랙·고도 기능은 정상 동작합니다.';
         }
@@ -1270,9 +1302,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
     currentTileLayer.addTo(map);
   }
 
+  function switchMapStyle(styleKey){
+    if (styleKey === currentStyleKey) return;
+    currentStyleKey = styleKey;
+    tileProviderIdx = 0;
+    addTileLayer(currentStyleKey, 0);
+    document.querySelectorAll('.map-style-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.style === styleKey);
+    });
+  }
+
   function initMap(){
     map = L.map('map', { zoomControl: true }).setView([37.5665, 126.9780], 12);
-    addTileLayer(tileProviderIdx);
+    addTileLayer(currentStyleKey, tileProviderIdx);
 
     let hoverRAF = null;
     map.on('mousemove', e => {
@@ -1298,6 +1340,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     // Manual dragging (real user gesture, not programmatic panTo) turns off auto-follow.
     map.on('dragstart', () => setFollowMode(false));
+
+    document.querySelectorAll('.map-style-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchMapStyle(btn.dataset.style));
+    });
 
     const followBtn = document.getElementById('followBtn');
     followBtn.addEventListener('click', () => {
