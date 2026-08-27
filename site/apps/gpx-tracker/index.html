@@ -816,13 +816,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
     header{ padding: 20px 16px 14px; }
     h1{ font-size: 26px; }
     main{ padding: 16px 14px 40px; gap: 14px; }
-    #map{ height: 280px; }
-    .chart-wrap{ height: 170px; }
+    #map{ height: 420px; }
+    .chart-wrap{ height: 240px; }
     .stat .value{ font-size: 16px; }
   }
 
   #map{
-    height: 360px; border:1.5px solid var(--ink); border-radius: var(--radius);
+    height: 560px; border:1.5px solid var(--ink); border-radius: var(--radius);
   }
   .map-wrap{ position:relative; }
   .map-style-switcher{
@@ -846,7 +846,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   @keyframes pulse{ 0%,100%{ opacity:0.35; } 50%{ opacity:0.15; } }
 
   .chart-wrap{
-    position:relative; height:190px; margin-top:16px;
+    position:relative; height:280px; margin-top:16px;
     border:1.5px solid var(--ink); border-radius: var(--radius); background:rgba(255,255,255,0.6); padding:10px 12px 4px;
   }
   .empty-state{
@@ -1313,7 +1313,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
 
   function initMap(){
-    map = L.map('map', { zoomControl: true }).setView([37.5665, 126.9780], 12);
+    map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 12);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
     addTileLayer(currentStyleKey, tileProviderIdx);
 
     let hoverRAF = null;
