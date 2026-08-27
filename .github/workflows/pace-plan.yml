@@ -17,11 +17,11 @@ on:
       input_file:
         description: "입력 파일 경로 (트래커 앱에서 내보낸 JSON)"
         required: false
-        default: "race-input.json"
+        default: "site/race-input.json"
       output_file:
-        description: "결과를 저장할 경로 (Pages로 서빙되는 위치)"
+        description: "결과를 저장할 경로 (Pages로 서빙되는 위치, site/ 폴더 안이어야 함)"
         required: false
-        default: "race-plan.json"
+        default: "site/race-plan.json"
 
 jobs:
   generate-plan:

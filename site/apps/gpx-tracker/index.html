@@ -847,6 +847,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .empty-state strong{ font-family:'Barlow Condensed',sans-serif; font-size:20px; text-transform:uppercase; color:var(--ink); }
 
   .candidates{ margin-top:14px; }
+  .plan-table{ width:100%; border-collapse:collapse; font-family:'IBM Plex Mono',monospace; font-size:11.5px; }
+  .plan-table th, .plan-table td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  .plan-table th{ color:var(--ink-soft); font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:0.04em; }
+  .race-delta-bar{
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    padding:14px 16px; border-radius:var(--radius); border:1.5px solid var(--ink); margin-bottom:16px;
+    font-family:'Barlow Condensed',sans-serif;
+  }
+  .race-delta-bar .delta-label{ font-size:13px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.05em; }
+  .race-delta-bar .delta-value{ font-size:32px; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+  .race-delta-bar.ahead{ background:rgba(47,82,51,0.12); }
+  .race-delta-bar.ahead .delta-value{ color:var(--forest-dark); }
+  .race-delta-bar.behind{ background:rgba(193,68,46,0.1); }
+  .race-delta-bar.behind .delta-value{ color:var(--marker); }
   .legend-hint{
     display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--ink-soft);
   }
@@ -865,6 +879,37 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </style>
 </head>
 <body>
+<script>
+(function(){
+  var ua = navigator.userAgent || '';
+  if (!/KAKAOTALK/i.test(ua)) return;
+  var banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#FEE500;color:#1B2B20;'
+    + 'padding:12px 14px;font-family:system-ui,sans-serif;font-size:13px;line-height:1.4;'
+    + 'display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 2px 6px rgba(0,0,0,0.2);';
+  var text = document.createElement('span');
+  text.textContent = '카카오톡 브라우저에서는 파일 업로드가 안 돼요.';
+  var btn = document.createElement('button');
+  btn.textContent = '기본 브라우저로 열기';
+  btn.style.cssText = 'background:#1B2B20;color:#fff;border:none;padding:9px 12px;border-radius:8px;'
+    + 'font-size:12px;white-space:nowrap;cursor:pointer;touch-action:manipulation;';
+  btn.addEventListener('click', function(){
+    var url = encodeURIComponent(location.href);
+    location.href = 'kakaotalk://web/openExternal?url=' + url;
+  });
+  banner.appendChild(text);
+  banner.appendChild(btn);
+  document.addEventListener('DOMContentLoaded', function(){
+    document.body.prepend(banner);
+    document.body.style.paddingTop = '52px';
+  });
+  if (document.readyState !== 'loading'){
+    document.body.prepend(banner);
+    document.body.style.paddingTop = '52px';
+  }
+})();
+</script>
+<div style="position:fixed;top:10px;left:10px;z-index:99999;font-family:system-ui,sans-serif;font-size:12px;"><a href="../../" style="background:rgba(20,23,28,0.75);color:#fff;padding:6px 12px;border-radius:999px;text-decoration:none;backdrop-filter:blur(4px);">← 홈</a></div>
 
 <header>
   <div class="brand">
@@ -912,11 +957,75 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="status-line" id="altStatus"></div>
       </div>
     </div>
+
+    <div class="panel">
+      <h2>3. 레이스 페이스 계획</h2>
+      <div class="mode-toggle">
+        <button id="sourceApiBtn" class="active">실시간 API</button>
+        <button id="sourceFileBtn">사내망 파일</button>
+      </div>
+
+      <div id="sourceApiControls">
+        <div class="field">
+          <label for="workerUrlInput">Worker 주소 (한 번만 입력하면 저장됨)</label>
+          <input type="text" id="workerUrlInput" placeholder="https://gpx-pace-planner.xxx.workers.dev">
+        </div>
+      </div>
+
+      <div id="sourceFileControls" style="display:none;">
+        <p class="hint">사내망 Ollama를 GitHub Actions로 호출하는 방식입니다. ① 아래에서 입력 파일을 내보내 저장소에 커밋 → ② Actions 탭에서 워크플로우 수동 실행 → ③ 완료 후 여기서 결과를 불러오세요.</p>
+        <div class="field">
+          <label for="planFilePathInput">결과 파일 경로 (사이트 루트 기준)</label>
+          <input type="text" id="planFilePathInput" value="../../race-plan.json">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="segIntervalSelect">구간 간격</label>
+        <select id="segIntervalSelect">
+          <option value="1">1 km 마다</option>
+          <option value="2" selected>2 km 마다</option>
+          <option value="5">5 km 마다</option>
+        </select>
+      </div>
+      <div class="mode-toggle">
+        <button id="goalTimeBtn" class="active">목표 완주시간</button>
+        <button id="goalPaceBtn">목표 평지 페이스</button>
+      </div>
+      <div class="field" id="goalTimeField">
+        <label for="goalTimeInput">목표 완주시간 (분)</label>
+        <input type="number" id="goalTimeInput" placeholder="예: 360 (6시간)">
+      </div>
+      <div class="field" id="goalPaceField" style="display:none;">
+        <label for="goalPaceInput">평지 목표 페이스 (분/km)</label>
+        <input type="number" step="0.1" id="goalPaceInput" placeholder="예: 5.5">
+      </div>
+      <div class="field">
+        <label for="goalNotesInput">컨디션 / 메모 (선택)</label>
+        <textarea id="goalNotesInput" rows="2" style="width:100%; padding:8px 10px; border:1.5px solid var(--ink); border-radius:var(--radius); font-family:'Inter',sans-serif; font-size:13px; resize:vertical;" placeholder="예: 내리막에서 무릎이 약함, 첫 트레일런 대회"></textarea>
+      </div>
+
+      <button class="action" id="getPlanBtn">페이스 계획 받기</button>
+      <button class="action" id="exportInputBtn" style="display:none;">① 입력 파일 내보내기</button>
+      <button class="action" id="loadPlanFileBtn" style="display:none; margin-top:8px;">③ 저장된 계획 불러오기</button>
+      <div class="status-line" id="planStatus"></div>
+
+      <div id="planResult" style="display:none; margin-top:14px;">
+        <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
+        <div id="planTable"></div>
+        <button class="action" id="startRaceBtn" style="margin-top:12px; background:var(--marker);">레이스 시작</button>
+      </div>
+    </div>
   </div>
 
   <!-- RIGHT PANEL -->
   <div>
-    <div class="stats-strip">
+    <div class="race-delta-bar" id="raceDeltaBar">
+      <span class="delta-label" id="raceDeltaLabel">페이스 상태</span>
+      <span class="delta-value" id="raceDeltaValue">–</span>
+    </div>
+
+    <div class="stats-strip" id="statsStrip">
       <div class="stat"><div class="label">총 거리</div><div class="value" id="statDist">–</div></div>
       <div class="stat"><div class="label">누적 상승</div><div class="value" id="statGain">–</div></div>
       <div class="stat"><div class="label">현재 고도</div><div class="value" id="statEle">–</div></div>
@@ -990,6 +1099,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   let liveMarker = null, accuracyCircle = null;
   let followMode = true;
   let wakeLock = null;
+  let pacePlan = null; // { segments: [{cumulativeDistanceKm, target_cumulative_seconds, ...}], overall_note }
+  let goalType = 'time';
+  let raceActive = false;
+  let raceStartTime = null;
   let chart;
   let watchId = null;
   let mode = 'gps';
@@ -1362,6 +1475,49 @@ svg.leaflet-image-layer.leaflet-interactive path {
     highlightIndex(idx);
     document.getElementById('statEle').textContent = Math.round(pt.ele) + ' m';
     document.getElementById('statProg').textContent = Math.round((pt.dist/totalDist)*100) + '%';
+    updateRaceDelta(pt.dist);
+  }
+
+  function updateRaceDelta(distMeters){
+    if (!raceActive || !pacePlan || !raceStartTime) return;
+    const targetSeconds = interpolateTargetSeconds(distMeters / 1000);
+    if (targetSeconds == null) return;
+    const elapsedSeconds = (Date.now() - raceStartTime) / 1000;
+    const deltaSeconds = Math.round(elapsedSeconds - targetSeconds);
+    const bar = document.getElementById('raceDeltaBar');
+    const valueEl = document.getElementById('raceDeltaValue');
+    const labelEl = document.getElementById('raceDeltaLabel');
+    const absSec = Math.abs(deltaSeconds);
+    const mm = Math.floor(absSec / 60);
+    const ss = absSec % 60;
+    const timeStr = `${mm}:${String(ss).padStart(2, '0')}`;
+    bar.style.display = 'flex';
+    if (deltaSeconds <= 0){
+      bar.className = 'race-delta-bar ahead';
+      labelEl.textContent = '계획보다 여유';
+      valueEl.textContent = '−' + timeStr;
+    } else {
+      bar.className = 'race-delta-bar behind';
+      labelEl.textContent = '계획보다 지연';
+      valueEl.textContent = '+' + timeStr;
+    }
+  }
+
+  // Linearly interpolate target cumulative seconds at a given distance (km) using the pace plan.
+  function interpolateTargetSeconds(distanceKm){
+    if (!pacePlan || !pacePlan.segments || pacePlan.segments.length === 0) return null;
+    const segs = pacePlan.segments;
+    // Build a (0,0) origin point plus each segment's (cumulative_distance_km, target_cumulative_seconds).
+    const pts = [{ d: 0, t: 0 }, ...segs.map(s => ({ d: s.cumulative_distance_km ?? s.cumulativeDistanceKm, t: s.target_cumulative_seconds }))];
+    if (distanceKm <= pts[0].d) return pts[0].t;
+    for (let i = 1; i < pts.length; i++){
+      if (distanceKm <= pts[i].d){
+        const a = pts[i-1], b = pts[i];
+        const ratio = (b.d - a.d) === 0 ? 0 : (distanceKm - a.d) / (b.d - a.d);
+        return a.t + ratio * (b.t - a.t);
+      }
+    }
+    return pts[pts.length - 1].t;
   }
 
   // ---------- mode toggle ----------
@@ -1509,6 +1665,260 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     // default: show first candidate
     updateForMatchedPoint(candidates[0], points.indexOf(candidates[0]));
+  });
+
+  // ---------- Race pace planning ----------
+  const sourceApiBtn = document.getElementById('sourceApiBtn');
+  const sourceFileBtn = document.getElementById('sourceFileBtn');
+  const sourceApiControls = document.getElementById('sourceApiControls');
+  const sourceFileControls = document.getElementById('sourceFileControls');
+  const planFilePathInput = document.getElementById('planFilePathInput');
+  const exportInputBtn = document.getElementById('exportInputBtn');
+  const loadPlanFileBtn = document.getElementById('loadPlanFileBtn');
+  const workerUrlInput = document.getElementById('workerUrlInput');
+  const segIntervalSelect = document.getElementById('segIntervalSelect');
+  const goalTimeBtn = document.getElementById('goalTimeBtn');
+  const goalPaceBtn = document.getElementById('goalPaceBtn');
+  const goalTimeField = document.getElementById('goalTimeField');
+  const goalPaceField = document.getElementById('goalPaceField');
+  const goalTimeInput = document.getElementById('goalTimeInput');
+  const goalPaceInput = document.getElementById('goalPaceInput');
+  const goalNotesInput = document.getElementById('goalNotesInput');
+  const getPlanBtn = document.getElementById('getPlanBtn');
+  const planStatus = document.getElementById('planStatus');
+  const planResult = document.getElementById('planResult');
+  const planOverallNote = document.getElementById('planOverallNote');
+  const planTable = document.getElementById('planTable');
+  const startRaceBtn = document.getElementById('startRaceBtn');
+
+  let planSourceMode = 'api'; // 'api' | 'file'
+  sourceApiBtn.addEventListener('click', () => {
+    planSourceMode = 'api';
+    sourceApiBtn.classList.add('active'); sourceFileBtn.classList.remove('active');
+    sourceApiControls.style.display = ''; sourceFileControls.style.display = 'none';
+    getPlanBtn.style.display = ''; exportInputBtn.style.display = 'none'; loadPlanFileBtn.style.display = 'none';
+  });
+  sourceFileBtn.addEventListener('click', () => {
+    planSourceMode = 'file';
+    sourceFileBtn.classList.add('active'); sourceApiBtn.classList.remove('active');
+    sourceFileControls.style.display = ''; sourceApiControls.style.display = 'none';
+    getPlanBtn.style.display = 'none'; exportInputBtn.style.display = ''; loadPlanFileBtn.style.display = '';
+  });
+
+  // Persist worker URL / file path across sessions (endpoint addresses, not secrets).
+  try {
+    const savedUrl = localStorage.getItem('gpxPacePlannerWorkerUrl');
+    if (savedUrl) workerUrlInput.value = savedUrl;
+    const savedPath = localStorage.getItem('gpxPacePlannerFilePath');
+    if (savedPath) planFilePathInput.value = savedPath;
+  } catch (e) { /* localStorage unavailable */ }
+  workerUrlInput.addEventListener('change', () => {
+    try { localStorage.setItem('gpxPacePlannerWorkerUrl', workerUrlInput.value.trim()); } catch (e) {}
+  });
+  planFilePathInput.addEventListener('change', () => {
+    try { localStorage.setItem('gpxPacePlannerFilePath', planFilePathInput.value.trim()); } catch (e) {}
+  });
+
+  goalTimeBtn.addEventListener('click', () => {
+    goalType = 'time';
+    goalTimeBtn.classList.add('active'); goalPaceBtn.classList.remove('active');
+    goalTimeField.style.display = ''; goalPaceField.style.display = 'none';
+  });
+  goalPaceBtn.addEventListener('click', () => {
+    goalType = 'pace';
+    goalPaceBtn.classList.add('active'); goalTimeBtn.classList.remove('active');
+    goalPaceField.style.display = ''; goalTimeField.style.display = 'none';
+  });
+
+  function computeSegments(intervalKm){
+    const intervalM = intervalKm * 1000;
+    const segments = [];
+    let segStartDist = 0, segGain = 0, segLoss = 0;
+    let nextBoundary = intervalM;
+    for (let i = 1; i < points.length; i++){
+      const delta = points[i].ele - points[i-1].ele;
+      if (delta > 0) segGain += delta; else segLoss += -delta;
+      const isLast = i === points.length - 1;
+      if (points[i].dist >= nextBoundary || isLast){
+        const segEndDist = points[i].dist;
+        const distanceKm = (segEndDist - segStartDist) / 1000;
+        if (distanceKm > 0.01){
+          const netChange = segGain - segLoss;
+          const avgGrade = (netChange / (distanceKm * 1000)) * 100;
+          segments.push({
+            index: segments.length,
+            distanceKm: +distanceKm.toFixed(2),
+            cumulativeDistanceKm: +(segEndDist / 1000).toFixed(2),
+            elevationGainM: Math.round(segGain),
+            elevationLossM: Math.round(segLoss),
+            avgGradePercent: +avgGrade.toFixed(1)
+          });
+        }
+        segStartDist = segEndDist;
+        segGain = 0; segLoss = 0;
+        nextBoundary += intervalM;
+      }
+    }
+    return segments;
+  }
+
+  function renderPlan(plan){
+    pacePlan = plan;
+    planOverallNote.textContent = plan.overall_note || '';
+    let html = '<table class="plan-table"><thead><tr>'
+      + '<th>구간</th><th>경사</th><th>목표 페이스</th><th>통과시간</th><th>코멘트</th>'
+      + '</tr></thead><tbody>';
+    let prevKm = 0;
+    (plan.segments || []).forEach(s => {
+      const cumKm = s.cumulative_distance_km ?? s.cumulativeDistanceKm;
+      const rangeLabel = `${prevKm.toFixed(1)}–${cumKm.toFixed(1)}km`;
+      prevKm = cumKm;
+      const totalMin = Math.floor(s.target_cumulative_seconds / 60);
+      const totalSec = Math.round(s.target_cumulative_seconds % 60);
+      html += `<tr><td>${rangeLabel}</td><td>${s.avg_grade_percent != null ? s.avg_grade_percent + '%' : ''}</td>`
+        + `<td>${s.target_pace_min_per_km != null ? s.target_pace_min_per_km.toFixed(1) + '/km' : ''}</td>`
+        + `<td>${totalMin}:${String(totalSec).padStart(2,'0')}</td>`
+        + `<td style="white-space:normal; max-width:160px;">${s.note || ''}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    planTable.innerHTML = html;
+    planResult.style.display = 'block';
+  }
+
+  // Shared: read the current form into { segments, goal }, or null (with a status message) if invalid.
+  function buildGoalAndSegments(){
+    if (points.length === 0){
+      planStatus.textContent = '먼저 GPX 파일을 업로드하세요.';
+      planStatus.classList.add('warn');
+      return null;
+    }
+    const intervalKm = parseFloat(segIntervalSelect.value);
+    const segments = computeSegments(intervalKm);
+    if (segments.length === 0){
+      planStatus.textContent = '구간을 계산할 수 없습니다.';
+      planStatus.classList.add('warn');
+      return null;
+    }
+    let goal;
+    if (goalType === 'time'){
+      const mins = parseFloat(goalTimeInput.value);
+      if (isNaN(mins) || mins <= 0){
+        planStatus.textContent = '목표 완주시간을 입력하세요.';
+        planStatus.classList.add('warn');
+        return null;
+      }
+      goal = { type: 'target_time', target_time_minutes: mins, notes: goalNotesInput.value.trim() };
+    } else {
+      const pace = parseFloat(goalPaceInput.value);
+      if (isNaN(pace) || pace <= 0){
+        planStatus.textContent = '목표 평지 페이스를 입력하세요.';
+        planStatus.classList.add('warn');
+        return null;
+      }
+      goal = { type: 'flat_pace', flat_pace_min_per_km: pace, notes: goalNotesInput.value.trim() };
+    }
+    planStatus.classList.remove('warn');
+    return { segments, goal };
+  }
+
+  // ----- Mode: 사내망 파일 (export race-input.json / import race-plan.json) -----
+  exportInputBtn.addEventListener('click', () => {
+    const built = buildGoalAndSegments();
+    if (!built) return;
+    const blob = new Blob([JSON.stringify(built, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'race-input.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    planStatus.textContent = 'race-input.json을 내보냈습니다. 저장소에 커밋한 뒤 Actions에서 워크플로우를 실행하세요.';
+  });
+
+  loadPlanFileBtn.addEventListener('click', async () => {
+    const path = planFilePathInput.value.trim();
+    if (!path){
+      planStatus.textContent = '결과 파일 경로를 입력하세요.';
+      planStatus.classList.add('warn');
+      return;
+    }
+    try { localStorage.setItem('gpxPacePlannerFilePath', path); } catch (e) {}
+    planStatus.classList.remove('warn');
+    planStatus.textContent = '결과 파일을 불러오는 중…';
+    loadPlanFileBtn.disabled = true;
+    try {
+      // Cache-bust so a freshly-committed file isn't served from a stale cache.
+      const res = await fetch(path + (path.includes('?') ? '&' : '?') + 't=' + Date.now());
+      if (!res.ok) throw new Error(`파일을 찾을 수 없습니다 (${res.status}). 워크플로우가 완료되어 커밋됐는지, 경로가 맞는지 확인하세요.`);
+      const plan = await res.json();
+      if (!plan.segments || !Array.isArray(plan.segments)){
+        throw new Error('파일 형식이 올바르지 않습니다.');
+      }
+      renderPlan(plan);
+      planStatus.textContent = `${plan.segments.length}개 구간 페이스 계획을 불러왔습니다.`;
+    } catch (err){
+      planStatus.classList.add('warn');
+      planStatus.textContent = '불러오기 실패: ' + err.message;
+    } finally {
+      loadPlanFileBtn.disabled = false;
+    }
+  });
+
+  // ----- Mode: 실시간 API (Cloudflare Worker 등) -----
+  getPlanBtn.addEventListener('click', async () => {
+    const workerUrl = workerUrlInput.value.trim();
+    if (!workerUrl){
+      planStatus.textContent = 'Worker 주소를 먼저 입력하세요.';
+      planStatus.classList.add('warn');
+      return;
+    }
+    try { localStorage.setItem('gpxPacePlannerWorkerUrl', workerUrl); } catch (e) {}
+
+    const built = buildGoalAndSegments();
+    if (!built) return;
+    const { segments, goal } = built;
+
+    planStatus.textContent = '계획을 계산하는 중…';
+    getPlanBtn.disabled = true;
+
+    try {
+      const res = await fetch(workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, segments })
+      });
+      if (!res.ok){
+        const errBody = await res.text();
+        throw new Error(`서버 오류 (${res.status}): ${errBody.slice(0, 200)}`);
+      }
+      const plan = await res.json();
+      if (!plan.segments || !Array.isArray(plan.segments)){
+        throw new Error('응답 형식이 올바르지 않습니다.');
+      }
+      renderPlan(plan);
+      planStatus.textContent = `${plan.segments.length}개 구간 페이스 계획을 받았습니다.`;
+    } catch (err){
+      planStatus.classList.add('warn');
+      planStatus.textContent = '페이스 계획을 받지 못했습니다: ' + err.message;
+    } finally {
+      getPlanBtn.disabled = false;
+    }
+  });
+
+  startRaceBtn.addEventListener('click', () => {
+    if (!pacePlan){ return; }
+    if (raceActive){
+      raceActive = false;
+      raceStartTime = null;
+      startRaceBtn.textContent = '레이스 시작';
+      document.getElementById('raceDeltaBar').style.display = 'none';
+    } else {
+      raceActive = true;
+      raceStartTime = Date.now();
+      startRaceBtn.textContent = '레이스 중지';
+    }
   });
 
 })();
