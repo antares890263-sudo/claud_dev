@@ -2,7 +2,6 @@ name = "gpx-pace-planner"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
-# 배포 후:
-#   wrangler secret put ANTHROPIC_API_KEY
-# 를 실행해서 API 키를 서버 쪽에만 안전하게 저장하세요.
-# (이 파일에 키를 직접 적지 마세요 — 저장소에 커밋되면 유출됩니다.)
+# Workers AI 바인딩 — 이것만 있으면 별도 API 키 없이 무료 티어(하루 10,000 뉴런)로 LLM을 호출할 수 있습니다.
+[ai]
+binding = "AI"
