@@ -965,6 +965,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="hint" style="margin-top:8px;">파일 목록에 .gpx가 안 보이면, 선택 화면에서 "찾아보기" 또는 "전체 파일"로 전환해 보세요.</div>
       <div class="filename" id="filename"></div>
       <div class="status-line warn" id="uploadError" style="display:none;"></div>
+      <div class="hint" id="restoredNotice" style="display:none; margin-top:6px;"></div>
+      <a href="#" id="clearSavedBtn" style="display:none; font-size:11.5px; color:var(--ink-soft); margin-top:4px;">저장된 트랙·계획 지우기</a>
     </div>
 
     <div class="panel">
@@ -1111,6 +1113,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
       <div id="planTable"></div>
       <button class="action" id="startRaceBtn" style="margin-top:12px; background:var(--marker);">레이스 시작</button>
+      <p class="hint" style="margin-top:6px;">누르면 GPS 추적 + 글랜스 모드가 한 번에 시작됩니다.</p>
     </div>
   </div>
 </main>
@@ -1270,6 +1273,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
     uploadErrorEl.textContent = '';
   }
 
+  function saveTrackToStorage(fileName){
+    try {
+      const data = { fileName, points, totalDist, totalGain, savedAt: Date.now() };
+      localStorage.setItem('gpxTrackerSavedTrack', JSON.stringify(data));
+    } catch (e) { /* 저장 공간 부족 등 — 조용히 무시, 기능엔 지장 없음 */ }
+  }
+
+  function loadTrackFromStorage(){
+    try {
+      const raw = localStorage.getItem('gpxTrackerSavedTrack');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
   function handleFile(file){
     clearUploadError();
     filenameEl.textContent = '읽는 중…';
@@ -1292,6 +1309,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         filenameEl.textContent = `${file.name} · ${points.length}개 포인트`;
         try {
           onTrackLoaded();
+          saveTrackToStorage(file.name);
         } catch (renderErr){
           showUploadError('파일은 읽었지만 지도/차트를 그리는 중 오류가 발생했습니다: ' + renderErr.message);
         }
@@ -1852,23 +1870,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (accuracyCircle){ map.removeLayer(accuracyCircle); accuracyCircle = null; }
   }
 
-  startGpsBtn.addEventListener('click', () => {
-    if (points.length === 0){ alert('먼저 GPX 파일을 업로드하세요.'); return; }
+  function startGpsTracking(){
+    if (points.length === 0) return false;
     if (!('geolocation' in navigator)){
       gpsStatus.textContent = '이 브라우저는 위치 정보를 지원하지 않습니다.';
       gpsStatus.classList.add('warn');
-      return;
+      return false;
     }
-    if (watchId !== null){
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      startGpsBtn.textContent = '위치 추적 시작';
-      gpsStatus.textContent = '추적을 중지했습니다.';
-      clearLiveMarker();
-      releaseWakeLock();
-      document.getElementById('followBtn').style.display = 'none';
-      return;
-    }
+    if (watchId !== null) return true; // already tracking
     startGpsBtn.textContent = '위치 추적 중지';
     document.getElementById('followBtn').style.display = 'flex';
     setFollowMode(true);
@@ -1886,6 +1895,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
       gpsStatus.classList.add('warn');
       gpsStatus.textContent = '위치 정보를 가져올 수 없습니다: ' + err.message;
     }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
+    return true;
+  }
+
+  function stopGpsTracking(){
+    if (watchId === null) return;
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    startGpsBtn.textContent = '위치 추적 시작';
+    gpsStatus.textContent = '추적을 중지했습니다.';
+    clearLiveMarker();
+    releaseWakeLock();
+    document.getElementById('followBtn').style.display = 'none';
+  }
+
+  startGpsBtn.addEventListener('click', () => {
+    if (points.length === 0){ alert('먼저 GPX 파일을 업로드하세요.'); return; }
+    if (watchId !== null){ stopGpsTracking(); } else { startGpsTracking(); }
   });
 
   // ---------- Altitude mode ----------
@@ -2064,7 +2090,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return segments;
   }
 
+  // 계획을 받는 시점에 미리 위치 권한 팝업을 띄워둔다 — 레이스 시작 버튼을 누르는 순간엔
+  // 이미 허용된 상태라 바로 추적이 시작된다 (출발선에서 팝업에 당황하지 않도록).
+  function primeLocationPermission(){
+    if (!('geolocation' in navigator)) return;
+    try {
+      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+    } catch (e) { /* 무시 */ }
+  }
+
   function renderPlan(plan){
+    primeLocationPermission();
     // 거리·페이스·통과시간은 전부 우리가 직접 계산한 lastComputedSegments 값을 쓴다 (항상 정확).
     // 모델 응답에서는 코칭 코멘트(note)만 가져온다.
     const modelSegments = Array.isArray(plan.segments) ? plan.segments : [];
@@ -2107,6 +2143,30 @@ svg.leaflet-image-layer.leaflet-interactive path {
     html += '</tbody></table>';
     planTable.innerHTML = html;
     planResult.style.display = 'block';
+    savePlanToStorage();
+  }
+
+  function savePlanToStorage(){
+    try {
+      const data = {
+        lastComputedSegments,
+        pacePlan,
+        segIntervalValue: segIntervalSelect.value,
+        goalType,
+        goalTimeValue: goalTimeInput.value,
+        goalPaceValue: goalPaceInput.value,
+        goalNotesValue: goalNotesInput.value,
+        savedAt: Date.now()
+      };
+      localStorage.setItem('gpxTrackerSavedPlan', JSON.stringify(data));
+    } catch (e) { /* 무시 */ }
+  }
+
+  function loadPlanFromStorage(){
+    try {
+      const raw = localStorage.getItem('gpxTrackerSavedPlan');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
   }
 
   // Shared: read the current form into { segments, goal }, or null (with a status message) if invalid.
@@ -2247,10 +2307,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       startRaceBtn.textContent = '레이스 시작';
       document.getElementById('raceDeltaBar').style.display = 'none';
     } else {
+      if (points.length === 0){ alert('먼저 GPX 파일을 업로드하세요.'); return; }
       raceActive = true;
       raceStartTime = Date.now();
       lastAnnouncedSegmentIndex = -1;
       startRaceBtn.textContent = '레이스 중지';
+      startGpsTracking();
+      document.getElementById('glanceOverlay').style.display = 'flex';
     }
   });
 
@@ -2267,6 +2330,59 @@ svg.leaflet-image-layer.leaflet-interactive path {
   document.getElementById('glanceCloseBtn').addEventListener('click', () => {
     glanceOverlay.style.display = 'none';
   });
+
+  // ---------- 저장된 트랙/계획 복원 (전날 미리 받아둔 계획을 레이스 당일 그대로 이어서 쓰기) ----------
+  document.getElementById('clearSavedBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    try {
+      localStorage.removeItem('gpxTrackerSavedTrack');
+      localStorage.removeItem('gpxTrackerSavedPlan');
+    } catch (err) {}
+    location.reload();
+  });
+
+  (function restoreFromStorage(){
+    const trackData = loadTrackFromStorage();
+    if (!trackData || !Array.isArray(trackData.points) || trackData.points.length === 0) return;
+
+    points = trackData.points;
+    totalDist = trackData.totalDist;
+    totalGain = trackData.totalGain;
+    filenameEl.textContent = `${trackData.fileName || '저장된 트랙'} · ${points.length}개 포인트`;
+    document.getElementById('clearSavedBtn').style.display = 'inline-block';
+
+    try {
+      onTrackLoaded();
+    } catch (e) { return; }
+
+    const savedDate = trackData.savedAt ? new Date(trackData.savedAt) : null;
+    const notice = document.getElementById('restoredNotice');
+    if (notice){
+      notice.style.display = 'block';
+      notice.textContent = savedDate
+        ? `이전에 불러온 트랙을 자동으로 복원했습니다 (${savedDate.toLocaleString('ko-KR')} 저장됨).`
+        : '이전에 불러온 트랙을 자동으로 복원했습니다.';
+    }
+
+    const planData = loadPlanFromStorage();
+    if (planData && Array.isArray(planData.lastComputedSegments) && planData.lastComputedSegments.length > 0 && planData.pacePlan){
+      lastComputedSegments = planData.lastComputedSegments;
+      if (planData.segIntervalValue) segIntervalSelect.value = planData.segIntervalValue;
+      if (planData.goalTimeValue) goalTimeInput.value = planData.goalTimeValue;
+      if (planData.goalPaceValue) goalPaceInput.value = planData.goalPaceValue;
+      if (planData.goalNotesValue) goalNotesInput.value = planData.goalNotesValue;
+      goalType = planData.goalType || 'time';
+      if (goalType === 'pace'){
+        goalPaceField.style.display = ''; goalTimeField.style.display = 'none';
+        goalPaceBtn.classList.add('active'); goalTimeBtn.classList.remove('active');
+      } else {
+        goalTimeField.style.display = ''; goalPaceField.style.display = 'none';
+        goalTimeBtn.classList.add('active'); goalPaceBtn.classList.remove('active');
+      }
+      renderPlan(planData.pacePlan);
+      planStatus.textContent = '저장된 페이스 계획도 함께 불러왔습니다.';
+    }
+  })();
 
 })();
 </script>
