@@ -35,7 +35,7 @@ function corsHeaders(origin) {
 // 무료 티어에서 가볍고 안정적으로 도는 instruct 모델.
 // 더 강한 모델이 필요하면 '@cf/meta/llama-3.1-70b-instruct' 등으로 바꿀 수 있지만
 // 뉴런 소모가 커져서 하루 무료 한도를 더 빨리 씀.
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 
 const SYSTEM_PROMPT = `너는 트레일 러닝 페이스 코치다. 사용자가 업로드한 GPX 코스를 구간으로 나눈 데이터와,
 사용자의 목표/컨디션을 받는다. 각 구간마다 목표 페이스(분/km)와 목표 통과 누적시간(초),
