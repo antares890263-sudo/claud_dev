@@ -870,6 +870,28 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .race-delta-bar.ahead .delta-value{ color:var(--forest-dark); }
   .race-delta-bar.behind{ background:rgba(193,68,46,0.1); }
   .race-delta-bar.behind .delta-value{ color:var(--marker); }
+
+  .glance-overlay{
+    display:none; position:fixed; inset:0; z-index:100000;
+    background:#10140F; color:#fff;
+    flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:28px;
+    font-family:'Barlow Condensed', sans-serif;
+  }
+  .glance-close{
+    position:absolute; top:16px; right:16px; width:48px; height:48px; border-radius:50%;
+    border:1.5px solid rgba(255,255,255,0.4); background:transparent; color:#fff;
+    font-size:20px; cursor:pointer; touch-action:manipulation;
+  }
+  .glance-label{ font-size:16px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.6); margin-bottom:6px; }
+  .glance-value{ font-family:'IBM Plex Mono',monospace; font-size:96px; font-weight:700; line-height:1; margin-bottom:28px; }
+  .glance-value.behind{ color:#FF6B57; }
+  .glance-value.ahead{ color:#7CD992; }
+  .glance-row{ display:flex; gap:36px; margin-bottom:22px; }
+  .glance-mini-label{ font-size:12px; color:rgba(255,255,255,0.55); text-transform:uppercase; letter-spacing:0.06em; }
+  .glance-mini-value{ font-family:'IBM Plex Mono',monospace; font-size:32px; font-weight:600; margin-top:4px; }
+  .glance-note{ font-size:16px; color:rgba(255,255,255,0.85); max-width:340px; line-height:1.4; }
+  @media (max-width:480px){ .glance-value{ font-size:68px; } .glance-row{ gap:24px; } }
   .legend-hint{
     display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--ink-soft);
   }
@@ -954,6 +976,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <p class="hint">기기의 위치 센서로 실시간 내 위치(파란 점)를 표시하고, 지도가 자동으로 따라갑니다. 트랙 위 가장 가까운 지점(빨간 점)도 함께 보여줍니다. 지도를 직접 움직이면 자동 추적이 잠시 꺼지며, 오른쪽 아래 버튼으로 다시 켤 수 있습니다.</p>
         <button class="action" id="startGpsBtn">위치 추적 시작</button>
         <div class="status-line" id="gpsStatus"></div>
+
+        <div style="display:flex; gap:16px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
+            <input type="checkbox" id="voiceToggle" checked> 음성 안내
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
+            <input type="checkbox" id="vibrateToggle" checked> 진동
+          </label>
+        </div>
+        <p class="hint" style="margin-top:6px;">레이스 중 구간이 바뀔 때마다 "OOkm 통과, 목표보다 X분 지연/여유"를 자동으로 읽어주고 진동으로도 알려줍니다.</p>
+        <button class="action" id="testAnnounceBtn" style="margin-top:8px; background:var(--ink-soft);">안내 테스트</button>
+      </div>
+
+      <div style="margin-top:10px;">
+        <button class="action" id="glanceModeBtn" style="background:var(--sky);">글랜스 모드 (달리면서 보기)</button>
       </div>
 
       <div id="altControls" style="display:none;">
@@ -1075,6 +1112,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
   </div>
 </main>
+
+<div id="glanceOverlay" class="glance-overlay">
+  <button id="glanceCloseBtn" class="glance-close" aria-label="글랜스 모드 닫기">✕</button>
+  <div class="glance-label" id="glanceStatusLabel">페이스 상태</div>
+  <div class="glance-value" id="glanceDeltaValue">–</div>
+  <div class="glance-row">
+    <div class="glance-mini">
+      <div class="glance-mini-label">다음 구간까지</div>
+      <div class="glance-mini-value" id="glanceNextDist">–</div>
+    </div>
+    <div class="glance-mini">
+      <div class="glance-mini-label">이번 구간 상승</div>
+      <div class="glance-mini-value" id="glanceClimb">–</div>
+    </div>
+  </div>
+  <div class="glance-note" id="glanceNote"></div>
+</div>
 
 <footer>지도 타일: OpenTopoMap / OpenStreetMap 기여자 · 모든 계산은 브라우저에서만 실행되며 GPX 파일은 서버로 전송되지 않습니다.</footer>
 
@@ -1529,21 +1583,80 @@ svg.leaflet-image-layer.leaflet-interactive path {
     updateRaceDelta(pt.dist);
   }
 
+  let lastAnnouncedSegmentIndex = -1;
+
+  function getCurrentSegmentIndex(distKm){
+    if (!lastComputedSegments.length) return -1;
+    for (let i = 0; i < lastComputedSegments.length; i++){
+      if (distKm <= lastComputedSegments[i].cumulativeDistanceKm) return i;
+    }
+    return lastComputedSegments.length - 1;
+  }
+
+  function speak(text){
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 1.0;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* 음성 미지원 브라우저 — 조용히 무시 */ }
+  }
+
+  function vibratePattern(deltaSeconds){
+    if (!('vibrate' in navigator)) return;
+    if (deltaSeconds <= 0) navigator.vibrate(200);
+    else if (deltaSeconds <= 180) navigator.vibrate([150, 100, 150]);
+    else navigator.vibrate([200, 100, 200, 100, 200]);
+  }
+
+  function formatDeltaSpeech(deltaSeconds){
+    const abs = Math.abs(Math.round(deltaSeconds));
+    const mm = Math.floor(abs / 60), ss = abs % 60;
+    const timeStr = mm > 0 ? `${mm}분 ${ss}초` : `${ss}초`;
+    return deltaSeconds <= 0 ? `목표보다 ${timeStr} 여유` : `목표보다 ${timeStr} 지연`;
+  }
+
+  function updateGlanceDisplay(deltaSeconds, segIdx, distKm){
+    const absSec = Math.abs(Math.round(deltaSeconds));
+    const mm = Math.floor(absSec / 60), ss = absSec % 60;
+    const timeStr = `${mm}:${String(ss).padStart(2, '0')}`;
+    const valueEl = document.getElementById('glanceDeltaValue');
+    const labelEl = document.getElementById('glanceStatusLabel');
+    if (!valueEl) return;
+    valueEl.textContent = (deltaSeconds <= 0 ? '−' : '+') + timeStr;
+    valueEl.className = 'glance-value ' + (deltaSeconds <= 0 ? 'ahead' : 'behind');
+    labelEl.textContent = deltaSeconds <= 0 ? '계획보다 여유' : '계획보다 지연';
+
+    if (segIdx >= 0 && lastComputedSegments[segIdx]){
+      const seg = lastComputedSegments[segIdx];
+      const distToNext = Math.max(seg.cumulativeDistanceKm - distKm, 0);
+      document.getElementById('glanceNextDist').textContent = distToNext.toFixed(1) + 'km';
+      document.getElementById('glanceClimb').textContent = '+' + seg.elevationGainM + 'm';
+      const note = (pacePlan && pacePlan.segments[segIdx]) ? pacePlan.segments[segIdx].note : '';
+      document.getElementById('glanceNote').textContent = note || '';
+    }
+  }
+
   function updateRaceDelta(distMeters){
     if (!raceActive || !pacePlan || !raceStartTime) return;
-    const targetSeconds = interpolateTargetSeconds(distMeters / 1000);
+    const distKm = distMeters / 1000;
+    const targetSeconds = interpolateTargetSeconds(distKm);
     if (targetSeconds == null) return;
     const elapsedSeconds = (Date.now() - raceStartTime) / 1000;
-    const deltaSeconds = Math.round(elapsedSeconds - targetSeconds);
+    const deltaSeconds = elapsedSeconds - targetSeconds;
+    const deltaRounded = Math.round(deltaSeconds);
+
     const bar = document.getElementById('raceDeltaBar');
     const valueEl = document.getElementById('raceDeltaValue');
     const labelEl = document.getElementById('raceDeltaLabel');
-    const absSec = Math.abs(deltaSeconds);
+    const absSec = Math.abs(deltaRounded);
     const mm = Math.floor(absSec / 60);
     const ss = absSec % 60;
     const timeStr = `${mm}:${String(ss).padStart(2, '0')}`;
     bar.style.display = 'flex';
-    if (deltaSeconds <= 0){
+    if (deltaRounded <= 0){
       bar.className = 'race-delta-bar ahead';
       labelEl.textContent = '계획보다 여유';
       valueEl.textContent = '−' + timeStr;
@@ -1551,6 +1664,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
       bar.className = 'race-delta-bar behind';
       labelEl.textContent = '계획보다 지연';
       valueEl.textContent = '+' + timeStr;
+    }
+
+    const segIdx = getCurrentSegmentIndex(distKm);
+    updateGlanceDisplay(deltaSeconds, segIdx, distKm);
+
+    // 새 구간에 진입했을 때만 음성/진동 알림 (매 GPS 업데이트마다 울리지 않도록)
+    if (segIdx > lastAnnouncedSegmentIndex && segIdx >= 0){
+      lastAnnouncedSegmentIndex = segIdx;
+      const seg = lastComputedSegments[segIdx];
+      const note = (pacePlan.segments[segIdx] && pacePlan.segments[segIdx].note) || '';
+      const voiceOn = document.getElementById('voiceToggle')?.checked;
+      const vibrateOn = document.getElementById('vibrateToggle')?.checked;
+      if (voiceOn) speak(`${Math.round(seg.cumulativeDistanceKm)}킬로미터 통과. ${formatDeltaSpeech(deltaSeconds)}. ${note}`);
+      if (vibrateOn) vibratePattern(deltaSeconds);
     }
   }
 
@@ -2040,8 +2167,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
     } else {
       raceActive = true;
       raceStartTime = Date.now();
+      lastAnnouncedSegmentIndex = -1;
       startRaceBtn.textContent = '레이스 중지';
     }
+  });
+
+  // ---------- 음성 안내 테스트 & 글랜스 모드 ----------
+  document.getElementById('testAnnounceBtn').addEventListener('click', () => {
+    speak('5킬로미터 통과. 목표보다 1분 30초 지연. 오르막이 심한 구간이므로 오버페이스하지 마세요.');
+    vibratePattern(90);
+  });
+
+  const glanceOverlay = document.getElementById('glanceOverlay');
+  document.getElementById('glanceModeBtn').addEventListener('click', () => {
+    glanceOverlay.style.display = 'flex';
+  });
+  document.getElementById('glanceCloseBtn').addEventListener('click', () => {
+    glanceOverlay.style.display = 'none';
   });
 
 })();
