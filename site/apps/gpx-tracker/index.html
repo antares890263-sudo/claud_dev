@@ -1888,8 +1888,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         const totalSecInt = Math.round(s.target_cumulative_seconds);
         const hh = Math.floor(totalSecInt / 3600);
         const mm = Math.floor((totalSecInt % 3600) / 60);
-        const ss = totalSecInt % 60;
-        timeStr = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+        timeStr = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
       }
       html += `<tr><td>${rangeLabel}</td><td>${s.avg_grade_percent != null ? s.avg_grade_percent + '%' : ''}</td>`
         + `<td>${s.target_pace_min_per_km != null ? s.target_pace_min_per_km.toFixed(1) + '/km' : '–'}</td>`
