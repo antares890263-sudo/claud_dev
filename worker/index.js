@@ -76,9 +76,11 @@ function buildUserPrompt(payload) {
 }
 
 // 모델이 코드펜스(```json ... ```)를 섞어 보내는 경우가 있어 파싱 전에 벗겨낸다.
+// 응답이 중간에 잘려 닫는 ```가 없는 경우에도 대응한다.
 function extractJson(text) {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1] : text;
+  let candidate = text.trim();
+  candidate = candidate.replace(/^```(?:json)?\s*/i, "");
+  candidate = candidate.replace(/```\s*$/, "");
   return JSON.parse(candidate.trim());
 }
 
@@ -140,6 +142,7 @@ export default {
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: buildUserPrompt(payload) },
         ],
+        max_tokens: 4096,
       });
     } catch (err) {
       return new Response(
