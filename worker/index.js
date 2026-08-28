@@ -45,7 +45,8 @@ const SYSTEM_PROMPT = `너는 트레일 러닝 페이스 코치다. 사용자가
 - 오르막 구간은 경사도에 비례해 페이스가 느려져야 한다 (Grade-Adjusted Pace 개념 참고).
 - 내리막이 너무 가파르면(예: -15% 이상) 부상 위험 때문에 무리하게 빠른 페이스를 주지 않는다.
 - 레이스 초반 구간은 사용자가 목표 페이스보다 오버페이스하지 않도록 보수적으로 잡는다.
-- 반드시 지정된 JSON 형식으로만 응답한다. 다른 텍스트, 설명, 마크다운을 절대 포함하지 않는다.
+- 절대로 코드(Python 등)를 작성하지 마라. 절대로 풀이 과정이나 설명 문장을 쓰지 마라.
+- 오직 지정된 JSON 객체 하나만 응답으로 출력해라. 응답의 첫 글자는 반드시 { 여야 한다.
 
 응답은 반드시 아래 JSON 형식 그대로여야 한다 (다른 필드 추가 금지):
 {
@@ -74,6 +75,29 @@ function buildUserPrompt(payload) {
     })),
   });
 }
+
+// 구조화된 출력 스키마 — 이걸 강제하면 모델이 코드/설명 등으로 딴 길로 새지 못하고
+// 정확히 이 형식의 JSON만 만들어낸다.
+const RESPONSE_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    segments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          index: { type: "number" },
+          target_pace_min_per_km: { type: "number" },
+          target_cumulative_seconds: { type: "number" },
+          note: { type: "string" },
+        },
+        required: ["index", "target_pace_min_per_km", "target_cumulative_seconds", "note"],
+      },
+    },
+    overall_note: { type: "string" },
+  },
+  required: ["segments", "overall_note"],
+};
 
 // 모델이 JSON 앞뒤로 설명 문장이나 코드펜스를 섞어 보내는 경우가 많아,
 // 앞뒤 텍스트가 뭐든 상관없이 첫 '{'부터 마지막 '}'까지만 잘라내 파싱한다.
@@ -146,6 +170,10 @@ export default {
           { role: "user", content: buildUserPrompt(payload) },
         ],
         max_tokens: 4096,
+        response_format: {
+          type: "json_schema",
+          json_schema: RESPONSE_JSON_SCHEMA,
+        },
       });
     } catch (err) {
       return new Response(
@@ -157,18 +185,24 @@ export default {
       );
     }
 
-    const rawText = aiResponse.response || "";
+    // response_format을 지원하는 모델은 이미 파싱된 객체를 response 필드로 줄 수도 있고,
+    // 문자열로 줄 수도 있어 두 경우 다 처리한다.
     let plan;
-    try {
-      plan = extractJson(rawText);
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "모델 응답을 JSON으로 해석하지 못했습니다.", raw: rawText.slice(0, 1500) }),
-        {
-          status: 502,
-          headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
-        }
-      );
+    if (aiResponse && typeof aiResponse.response === "object" && aiResponse.response !== null) {
+      plan = aiResponse.response;
+    } else {
+      const rawText = (aiResponse && aiResponse.response) || "";
+      try {
+        plan = extractJson(rawText);
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "모델 응답을 JSON으로 해석하지 못했습니다.", raw: rawText.slice(0, 1500) }),
+          {
+            status: 502,
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+          }
+        );
+      }
     }
 
     return new Response(JSON.stringify(plan), {
