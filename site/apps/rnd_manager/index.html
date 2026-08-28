@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>정부 R&D 사업 AI 매니저</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #14171C;
+    --panel: #1D2128;
+    --panel2: #22262E;
+    --ink: #EDEFF3;
+    --ink-soft: #8B92A1;
+    --ink-faint: #5C6270;
+    --line: rgba(255,255,255,0.08);
+    --accent: #E3B23C;
+    --accent-soft: rgba(227,178,60,0.16);
+    --good: #4CAF7D;
+    --good-soft: rgba(76,175,125,0.16);
+    --mid: #E3B23C;
+    --mid-soft: rgba(227,178,60,0.16);
+    --bad: #D7263D;
+    --bad-soft: rgba(215,38,61,0.16);
+    --info: #3D8FB0;
+    --info-soft: rgba(61,143,176,0.16);
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family:'Inter', system-ui, sans-serif;
+    padding-bottom: 40px;
+  }
+  a{ color: inherit; }
+  header{
+    padding: 20px 16px 8px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand a.back{ font-size:11px; color: var(--ink-soft); text-decoration:none; margin-bottom:4px; display:inline-block; }
+  h1{
+    font-family:'Barlow Condensed', sans-serif;
+    font-weight:700;
+    font-size: 24px;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .subtitle{ color: var(--ink-soft); font-size: 12px; margin-top:2px; }
+  .icon-btn{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .icon-btn:active{ transform: scale(0.94); }
+  .icon-btn svg{ width:18px; height:18px; }
+
+  nav.tabs{
+    max-width: 880px;
+    margin: 14px auto 0;
+    padding: 0 16px;
+    display:flex;
+    gap: 8px;
+  }
+  nav.tabs button{
+    flex:1;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 6px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  nav.tabs button.active{
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  main{
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px 16px 60px;
+  }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2{
+    font-family:'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight:700;
+    margin: 0 0 12px;
+    letter-spacing: 0.01em;
+  }
+  .card h3{
+    font-size: 13px;
+    font-weight:600;
+    margin: 0 0 8px;
+    color: var(--ink-soft);
+  }
+
+  .field{ margin-bottom: 12px; }
+  .field label{ display:block; font-size:12.5px; color: var(--ink-soft); margin-bottom:5px; }
+  .field input[type=text], .field input[type=number], .field input[type=date], .field textarea, .field select{
+    width:100%;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family:inherit;
+    font-size: 14px;
+    padding: 10px 11px;
+    border-radius: 9px;
+    outline:none;
+  }
+  .field textarea{ resize: vertical; min-height: 70px; }
+  .field input:focus, .field textarea:focus, .field select:focus{ border-color: var(--accent); }
+  .field-row{ display:flex; gap:10px; }
+  .field-row > .field{ flex:1; min-width:0; }
+  .checkbox-field{ display:flex; align-items:center; gap:8px; font-size: 13.5px; color: var(--ink); margin-bottom:12px; }
+  .checkbox-field input{ width:16px; height:16px; }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    background: var(--accent);
+    color: #1A1300;
+    border:none;
+    font-family:inherit;
+    font-weight:700;
+    font-size: 13.5px;
+    padding: 10px 16px;
+    border-radius: 9px;
+    cursor:pointer;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn.secondary{
+    background: var(--panel2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    font-weight:600;
+  }
+  .btn.ghost{
+    background: transparent;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    font-weight:600;
+  }
+  .btn.danger{ background: var(--bad); color:#fff; }
+  .btn.small{ padding:7px 11px; font-size:12.5px; border-radius:8px; }
+  .btn.block{ width:100%; }
+  .btn-row{ display:flex; gap:8px; flex-wrap:wrap; margin-top: 6px;}
+
+  .tag-input-wrap{ display:flex; flex-wrap:wrap; gap:6px; padding:8px; background: var(--panel2); border:1px solid var(--line); border-radius:9px; }
+  .tag{ background: var(--accent-soft); color: var(--accent); font-size:12px; font-weight:600; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:5px; }
+  .tag button{ background:none; border:none; color: var(--accent); cursor:pointer; font-size:13px; line-height:1; padding:0; }
+  .tag-input-wrap input{ flex:1; min-width:80px; background:none; border:none; color:var(--ink); font-family:inherit; font-size:13px; outline:none; }
+
+  .empty-hint{ color: var(--ink-faint); font-size: 13px; text-align:center; padding: 28px 10px; }
+
+  .badge{ display:inline-flex; align-items:center; font-size:11.5px; font-weight:700; padding: 3px 8px; border-radius: 6px; }
+  .badge.good{ background: var(--good-soft); color: var(--good); }
+  .badge.mid{ background: var(--mid-soft); color: var(--mid); }
+  .badge.bad{ background: var(--bad-soft); color: var(--bad); }
+  .badge.info{ background: var(--info-soft); color: var(--info); }
+  .badge.neutral{ background: var(--panel2); color: var(--ink-soft); }
+
+  .ann-card{ background: var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  .ann-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .ann-title{ font-size:15px; font-weight:700; margin:0 0 4px; }
+  .ann-meta{ font-size:11.5px; color: var(--ink-faint); }
+  .ann-stats{ display:grid; grid-template-columns: repeat(2,1fr); gap:8px; margin: 12px 0; }
+  .stat-box{ background: var(--panel2); border-radius:9px; padding:9px 11px; }
+  .stat-box .k{ font-size:10.5px; color: var(--ink-faint); margin-bottom:2px; }
+  .stat-box .v{ font-size:13.5px; font-weight:700; }
+  .ann-summary{ font-size:13px; color: var(--ink-soft); line-height:1.55; margin: 10px 0; }
+  .ann-reasons{ font-size:12.5px; color: var(--ink-soft); line-height:1.6; margin: 8px 0; padding-left:18px; }
+  .idea-box{ background: var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:8px; }
+  .idea-box .idea-title{ font-size:13.5px; font-weight:700; margin-bottom:3px; }
+  .idea-box .idea-desc{ font-size:12.5px; color: var(--ink-soft); line-height:1.5; margin-bottom:8px; }
+
+  .dday{ font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:15px; }
+  .dday.urgent{ color: var(--bad); }
+  .dday.soon{ color: var(--mid); }
+  .dday.safe{ color: var(--good); }
+
+  .stage-group{ margin-bottom: 22px; }
+  .stage-group-title{ display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color: var(--ink-soft); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; }
+  .stage-group-title .count{ background: var(--panel2); color: var(--ink-faint); font-size:10.5px; padding:2px 7px; border-radius:20px; }
+
+  .proj-card{ background: var(--panel); border:1px solid var(--line); border-radius:14px; margin-bottom:12px; overflow:hidden; }
+  .proj-head{ padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
+  .proj-head .t{ font-size:14.5px; font-weight:700; }
+  .proj-head .s{ font-size:11.5px; color: var(--ink-faint); margin-top:3px; }
+  .proj-stage-select{ background: var(--panel2); border:1px solid var(--line); color: var(--accent); font-family:inherit; font-weight:700; font-size:12px; padding:6px 8px; border-radius:8px; }
+  .proj-body{ display:none; border-top:1px solid var(--line); padding: 14px 16px 16px; }
+  .proj-body.open{ display:block; }
+
+  .subtabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .subtabs button{ background: var(--panel2); border:1px solid var(--line); color: var(--ink-soft); font-family:inherit; font-size:12px; font-weight:600; padding:7px 10px; border-radius:8px; cursor:pointer; }
+  .subtabs button.active{ background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .subpanel{ display:none; }
+  .subpanel.active{ display:block; }
+
+  table{ width:100%; border-collapse: collapse; font-size:12.5px; }
+  th, td{ text-align:left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th{ color: var(--ink-faint); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.03em; }
+  td input, td select{ width:100%; background: var(--panel2); border:1px solid var(--line); color:var(--ink); font-family:inherit; font-size:12.5px; padding:6px 7px; border-radius:6px; }
+  .row-del{ background:none; border:none; color: var(--ink-faint); cursor:pointer; font-size:15px; padding:2px 4px; }
+  .row-del:hover{ color: var(--bad); }
+  .table-wrap{ overflow-x:auto; }
+
+  .budget-total{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:13px; }
+  .budget-total b{ font-size:16px; }
+  .budget-split{ display:flex; gap:8px; margin-top:8px; }
+  .budget-split .chip{ flex:1; background: var(--panel2); border-radius:8px; padding:8px 10px; }
+  .budget-split .chip .k{ font-size:10.5px; color: var(--ink-faint); }
+  .budget-split .chip .v{ font-size:13.5px; font-weight:700; }
+
+  .checklist-item{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
+  .checklist-item:last-child{ border-bottom:none; }
+  .checklist-item input[type=checkbox]{ width:17px; height:17px; flex-shrink:0; }
+  .checklist-item span{ flex:1; font-size:13.5px; }
+  .checklist-item.done span{ color: var(--ink-faint); text-decoration: line-through; }
+
+  .milestone-item{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .milestone-item .dot{ width:8px; height:8px; border-radius:50%; background: var(--accent); flex-shrink:0; }
+  .milestone-item .m-label{ flex:1; }
+  .milestone-item .m-date{ color: var(--ink-faint); font-size:11.5px; }
+
+  .report-box{ background: var(--panel2); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .report-box .r-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .report-box .r-head b{ font-size:13.5px; }
+
+  .outline-item{ background: var(--panel2); border-radius:9px; padding:10px 12px; margin-bottom:8px; }
+  .outline-item .o-title{ font-size:13.5px; font-weight:700; margin-bottom:3px; }
+  .outline-item .o-guide{ font-size:12px; color: var(--ink-soft); line-height:1.5; }
+
+  .modal{ position:fixed; inset:0; background: rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal.hidden{ display:none; }
+  .modal-box{ background: var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; max-width:440px; width:100%; max-height:86vh; overflow-y:auto; }
+  .modal-box h2{ font-family:'Barlow Condensed', sans-serif; font-size:19px; margin:0 0 14px; }
+
+  .status-line{ font-size:12px; color: var(--ink-soft); margin-top:8px; min-height:16px; }
+  .status-line.err{ color: var(--bad); }
+  .status-line.ok{ color: var(--good); }
+
+  .collapse-form{ display:none; }
+  .collapse-form.open{ display:block; }
+
+  footer{ text-align:center; color: var(--ink-faint); font-size: 11px; padding: 20px 0 10px; max-width:880px; margin:0 auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <a class="back" href="../../">&larr; 앱 모음으로</a>
+    <h1>정부 R&D 사업 AI 매니저</h1>
+    <div class="subtitle">발굴부터 최종보고까지, 우리 회사 정부과제 파이프라인</div>
+  </div>
+  <button class="icon-btn" id="settingsBtn" title="설정">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="company">회사정보</button>
+  <button class="tab-btn" data-tab="announcements">사업공고 분석</button>
+  <button class="tab-btn" data-tab="projects">과제 파이프라인</button>
+</nav>
+
+<main>
+
+  <!-- ===================== TAB: 회사정보 ===================== -->
+  <section class="tab-panel active" id="tab-company">
+    <div class="card">
+      <h2>우리 회사 정보</h2>
+      <div class="field-row">
+        <div class="field">
+          <label>지역</label>
+          <input type="text" id="c-region" placeholder="예: 강원도">
+        </div>
+        <div class="field">
+          <label>기업 구분</label>
+          <select id="c-size">
+            <option value="예비창업">예비창업</option>
+            <option value="소상공인">소상공인</option>
+            <option value="중소기업" selected>중소기업</option>
+            <option value="중견기업">중견기업</option>
+            <option value="대기업">대기업</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>직원 수</label>
+          <input type="number" id="c-employees" placeholder="예: 12">
+        </div>
+        <div class="field">
+          <label>설립 연차(년)</label>
+          <input type="number" id="c-years" placeholder="예: 5">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>업종</label>
+          <input type="text" id="c-industry" placeholder="예: AI 개발기업">
+        </div>
+        <div class="field">
+          <label>연 매출</label>
+          <input type="text" id="c-revenue" placeholder="예: 8억원">
+        </div>
+      </div>
+      <div class="checkbox-field">
+        <input type="checkbox" id="c-haslab">
+        <label for="c-haslab" style="margin:0;">기업부설연구소 보유</label>
+      </div>
+      <div class="field">
+        <label>보유기술 / 핵심역량 (엔터로 추가)</label>
+        <div class="tag-input-wrap" id="c-techs-wrap">
+          <input type="text" id="c-techs-input" placeholder="예: VLM, LLM, 제조AI 입력 후 Enter">
+        </div>
+      </div>
+      <div class="field">
+        <label>회사 소개 / 비고 (선택)</label>
+        <textarea id="c-notes" placeholder="사업 목표, 최근 실적, 특이사항 등을 적어두면 AI 분석 정확도가 올라갑니다."></textarea>
+      </div>
+      <button class="btn block" id="c-save">회사 정보 저장</button>
+      <div class="status-line" id="c-status"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB: 공고분석 ===================== -->
+  <section class="tab-panel" id="tab-announcements">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">사업공고</h2>
+        <button class="btn small" id="ann-add-toggle">+ 새 공고</button>
+      </div>
+      <div class="collapse-form" id="ann-add-form" style="margin-top:14px;">
+        <div class="field">
+          <label>공고 제목</label>
+          <input type="text" id="a-title" placeholder="예: 2026년 중소기업 기술혁신개발사업">
+        </div>
+        <div class="field">
+          <label>공고 링크 (선택)</label>
+          <input type="text" id="a-url" placeholder="https://...">
+        </div>
+        <div class="field">
+          <label>공고문 원문 / 요약 붙여넣기</label>
+          <textarea id="a-text" style="min-height:120px;" placeholder="지원자격, 사업비, 마감일, 컨소시엄 요건 등이 포함된 공고 내용을 붙여넣으세요."></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="a-save">공고 추가</button>
+          <button class="btn ghost" id="a-cancel">취소</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ann-list"></div>
+  </section>
+
+  <!-- ===================== TAB: 과제 파이프라인 ===================== -->
+  <section class="tab-panel" id="tab-projects">
+    <div id="proj-list"></div>
+  </section>
+
+</main>
+
+<footer>정적 페이지 · 모든 데이터는 이 브라우저에만 저장됩니다 (localStorage) · AI 분석은 선택 사항입니다</footer>
+
+<!-- ===================== SETTINGS MODAL ===================== -->
+<div class="modal hidden" id="settingsModal">
+  <div class="modal-box">
+    <h2>설정</h2>
+    <div class="field">
+      <label for="workerUrlInput">AI Worker 주소 (선택, 한 번만 입력하면 저장됨)</label>
+      <input type="text" id="workerUrlInput" placeholder="https://rnd-manager-ai.xxx.workers.dev">
+    </div>
+    <div class="status-line">Worker를 배포하지 않아도 공고 분석/목차 항목을 직접 입력해서 앱을 계속 사용할 수 있습니다. 배포 방법은 저장소의 worker-rnd-manager/README.md를 참고하세요.</div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn" id="settingsSave">저장</button>
+      <button class="btn ghost" id="settingsClose">닫기</button>
+    </div>
+    <div style="border-top:1px solid var(--line); margin-top:16px; padding-top:14px;">
+      <button class="btn danger small" id="resetAllBtn">모든 데이터 초기화</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ANALYSIS MODAL ===================== -->
+<div class="modal hidden" id="analyzeModal">
+  <div class="modal-box">
+    <h2 id="analyzeModalTitle">공고 분석</h2>
+    <div id="analyzeModalBody"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- Storage helpers ----------------
+  function load(key, fallback){
+    try{
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw);
+    }catch(e){ return fallback; }
+  }
+  function save(key, val){
+    try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+  }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  const LS_COMPANY = 'rndManagerCompany';
+  const LS_ANN = 'rndManagerAnnouncements';
+  const LS_PROJ = 'rndManagerProjects';
+  const LS_WORKER = 'rndManagerWorkerUrl';
+
+  let company = load(LS_COMPANY, {
+    region:'', size:'중소기업', employees:'', years:'', industry:'', revenue:'',
+    hasLab:false, techs:[], notes:''
+  });
+  let announcements = load(LS_ANN, []);
+  let projects = load(LS_PROJ, []);
+
+  const STAGES = [
+    {key:'lead', label:'발굴'},
+    {key:'analyzed', label:'분석완료'},
+    {key:'idea', label:'아이디어 확정'},
+    {key:'drafting', label:'계획서 작성중'},
+    {key:'submitted', label:'제출완료'},
+    {key:'selected', label:'선정'},
+    {key:'inprogress', label:'수행중'},
+    {key:'interim', label:'중간보고'},
+    {key:'annual', label:'연차보고'},
+    {key:'final', label:'최종보고'},
+    {key:'done', label:'완료'}
+  ];
+
+  const DEFAULT_CHECKLIST = [
+    '사업계획서', '사업자등록증', '기업부설연구소 인증서', '컨소시엄 협약서(해당 시)',
+    '참여연구원 이력서', '최근 3년 재무제표', '과제수행계획서 요약(1p)'
+  ];
+  const BUDGET_CATEGORIES = ['인건비','재료비/연구시설장비비','연구활동비','위탁연구개발비','간접비','기타'];
+  const BUDGET_TYPES = ['정부지원금','자기부담금(현금)','자기부담금(현물)'];
+
+  // ---------------- Tabs ----------------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ---------------- Settings modal ----------------
+  const settingsModal = document.getElementById('settingsModal');
+  const workerUrlInput = document.getElementById('workerUrlInput');
+  workerUrlInput.value = load(LS_WORKER, '') || '';
+  document.getElementById('settingsBtn').addEventListener('click', ()=> settingsModal.classList.remove('hidden'));
+  document.getElementById('settingsClose').addEventListener('click', ()=> settingsModal.classList.add('hidden'));
+  document.getElementById('settingsSave').addEventListener('click', ()=>{
+    save(LS_WORKER, workerUrlInput.value.trim());
+    settingsModal.classList.add('hidden');
+  });
+  document.getElementById('resetAllBtn').addEventListener('click', ()=>{
+    if (!confirm('정말 모든 회사정보/공고/과제 데이터를 삭제할까요? 되돌릴 수 없습니다.')) return;
+    localStorage.removeItem(LS_COMPANY);
+    localStorage.removeItem(LS_ANN);
+    localStorage.removeItem(LS_PROJ);
+    location.reload();
+  });
+
+  function getWorkerUrl(){ return (load(LS_WORKER,'') || '').trim(); }
+
+  // ---------------- Company tab ----------------
+  const cRegion = document.getElementById('c-region');
+  const cSize = document.getElementById('c-size');
+  const cEmployees = document.getElementById('c-employees');
+  const cYears = document.getElementById('c-years');
+  const cIndustry = document.getElementById('c-industry');
+  const cRevenue = document.getElementById('c-revenue');
+  const cHasLab = document.getElementById('c-haslab');
+  const cNotes = document.getElementById('c-notes');
+  const cTechsWrap = document.getElementById('c-techs-wrap');
+  const cTechsInput = document.getElementById('c-techs-input');
+
+  function renderTechs(){
+    cTechsWrap.querySelectorAll('.tag').forEach(t=>t.remove());
+    company.techs.forEach((t, i)=>{
+      const el = document.createElement('span');
+      el.className = 'tag';
+      el.innerHTML = '<span></span><button type="button" aria-label="삭제">&times;</button>';
+      el.querySelector('span').textContent = t;
+      el.querySelector('button').addEventListener('click', ()=>{
+        company.techs.splice(i,1);
+        renderTechs();
+      });
+      cTechsWrap.insertBefore(el, cTechsInput);
+    });
+  }
+  cTechsInput.addEventListener('keydown', (e)=>{
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      const v = cTechsInput.value.trim();
+      if (v){
+        company.techs.push(v);
+        cTechsInput.value = '';
+        renderTechs();
+      }
+    }
+  });
+
+  function loadCompanyForm(){
+    cRegion.value = company.region || '';
+    cSize.value = company.size || '중소기업';
+    cEmployees.value = company.employees || '';
+    cYears.value = company.years || '';
+    cIndustry.value = company.industry || '';
+    cRevenue.value = company.revenue || '';
+    cHasLab.checked = !!company.hasLab;
+    cNotes.value = company.notes || '';
+    renderTechs();
+  }
+  document.getElementById('c-save').addEventListener('click', ()=>{
+    company = {
+      region: cRegion.value.trim(),
+      size: cSize.value,
+      employees: cEmployees.value.trim(),
+      years: cYears.value.trim(),
+      industry: cIndustry.value.trim(),
+      revenue: cRevenue.value.trim(),
+      hasLab: cHasLab.checked,
+      techs: company.techs,
+      notes: cNotes.value.trim()
+    };
+    save(LS_COMPANY, company);
+    const st = document.getElementById('c-status');
+    st.textContent = '저장되었습니다.';
+    st.className = 'status-line ok';
+    setTimeout(()=>{ st.textContent=''; st.className='status-line'; }, 2200);
+  });
+  loadCompanyForm();
+
+  // ---------------- Announcements tab ----------------
+  const annAddToggle = document.getElementById('ann-add-toggle');
+  const annAddForm = document.getElementById('ann-add-form');
+  annAddToggle.addEventListener('click', ()=> annAddForm.classList.toggle('open'));
+  document.getElementById('a-cancel').addEventListener('click', ()=>{
+    annAddForm.classList.remove('open');
+    document.getElementById('a-title').value='';
+    document.getElementById('a-url').value='';
+    document.getElementById('a-text').value='';
+  });
+  document.getElementById('a-save').addEventListener('click', ()=>{
+    const title = document.getElementById('a-title').value.trim();
+    const url = document.getElementById('a-url').value.trim();
+    const text = document.getElementById('a-text').value.trim();
+    if (!title){ alert('공고 제목을 입력하세요.'); return; }
+    announcements.unshift({
+      id: uid(), title, url, text,
+      createdAt: Date.now(),
+      analysis: null
+    });
+    save(LS_ANN, announcements);
+    document.getElementById('a-title').value='';
+    document.getElementById('a-url').value='';
+    document.getElementById('a-text').value='';
+    annAddForm.classList.remove('open');
+    renderAnnouncements();
+  });
+
+  function fitBadgeClass(level){
+    if (level === '높음') return 'good';
+    if (level === '보통') return 'mid';
+    if (level === '낮음') return 'bad';
+    return 'neutral';
+  }
+  function ddayText(dateStr){
+    if (!dateStr) return null;
+    const m = dateStr.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+    if (!m) return null;
+    const target = new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]));
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.round((target - today) / 86400000);
+    return diff;
+  }
+
+  const annList = document.getElementById('ann-list');
+
+  function renderAnnouncements(){
+    if (announcements.length === 0){
+      annList.innerHTML = '<div class="empty-hint">아직 등록된 공고가 없습니다. "+ 새 공고"로 추가해보세요.</div>';
+      return;
+    }
+    annList.innerHTML = announcements.map(a=>{
+      const an = a.analysis;
+      let dday = an ? ddayText(an.deadline_text) : null;
+      let ddayHtml = '';
+      if (dday !== null && !isNaN(dday)){
+        const cls = dday < 0 ? 'urgent' : dday <= 7 ? 'urgent' : dday <= 21 ? 'soon' : 'safe';
+        ddayHtml = '<span class="dday '+cls+'">'+(dday>=0 ? 'D-'+dday : '마감')+'</span>';
+      }
+      const alreadyProject = projects.some(p=>p.announcementId === a.id);
+      return '<div class="ann-card" data-id="'+a.id+'">'
+        + '<div class="ann-top">'
+          + '<div><div class="ann-title">'+esc(a.title)+'</div>'
+          + '<div class="ann-meta">'+(a.url ? '<a href="'+esc(a.url)+'" target="_blank" rel="noopener">공고 링크 열기</a> · ' : '')+new Date(a.createdAt).toLocaleDateString()+' 등록</div></div>'
+          + '<div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">'
+            + (an ? '<span class="badge '+fitBadgeClass(an.fit_level)+'">지원가능성 '+esc(an.fit_level)+'</span>' : '<span class="badge neutral">미분석</span>')
+            + ddayHtml
+          + '</div>'
+        + '</div>'
+        + (an ? (
+            '<div class="ann-stats">'
+            + '<div class="stat-box"><div class="k">사업비</div><div class="v">'+esc(an.budget_max_text||'확인불가')+'</div></div>'
+            + '<div class="stat-box"><div class="k">마감</div><div class="v">'+esc(an.deadline_text||'확인불가')+'</div></div>'
+            + '<div class="stat-box"><div class="k">컨소시엄</div><div class="v">'+esc(an.consortium_required||'확인불가')+'</div></div>'
+            + '<div class="stat-box"><div class="k">대학 참여</div><div class="v">'+esc(an.university_allowed||'확인불가')+'</div></div>'
+            + '</div>'
+            + '<div class="ann-summary">'+esc(an.summary||'')+'</div>'
+            + (an.fit_reasons && an.fit_reasons.length ? '<ul class="ann-reasons">'+an.fit_reasons.map(r=>'<li>'+esc(r)+'</li>').join('')+'</ul>' : '')
+            + (an.idea_suggestions && an.idea_suggestions.length ? '<h3 style="margin-top:12px;">추천 과제 아이디어</h3>' + an.idea_suggestions.map((idea,i)=>
+                '<div class="idea-box"><div class="idea-title">'+esc(idea.title)+'</div><div class="idea-desc">'+esc(idea.description)+'</div>'
+                + '<button class="btn small" data-action="start-project" data-id="'+a.id+'" data-idea="'+i+'">이 아이디어로 과제 시작</button></div>'
+              ).join('') : '')
+          ) : '')
+        + '<div class="btn-row">'
+          + '<button class="btn small secondary" data-action="analyze" data-id="'+a.id+'">'+(an?'다시 AI 분석':'AI로 분석하기')+'</button>'
+          + '<button class="btn small ghost" data-action="manual" data-id="'+a.id+'">수동 입력</button>'
+          + (!alreadyProject ? '<button class="btn small ghost" data-action="start-project" data-id="'+a.id+'" data-idea="-1">아이디어 없이 과제 시작</button>' : '')
+          + '<button class="btn small danger" data-action="delete-ann" data-id="'+a.id+'">삭제</button>'
+        + '</div>'
+      + '</div>';
+    }).join('');
+  }
+
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  annList.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    const ann = announcements.find(a=>a.id===id);
+    if (!ann) return;
+
+    if (action === 'delete-ann'){
+      if (!confirm('이 공고를 삭제할까요?')) return;
+      announcements = announcements.filter(a=>a.id!==id);
+      save(LS_ANN, announcements);
+      renderAnnouncements();
+    }
+    else if (action === 'analyze'){
+      runAnalyze(ann);
+    }
+    else if (action === 'manual'){
+      openManualAnalysis(ann);
+    }
+    else if (action === 'start-project'){
+      const ideaIdx = parseInt(btn.dataset.idea, 10);
+      const idea = (ideaIdx >= 0 && ann.analysis && ann.analysis.idea_suggestions) ? ann.analysis.idea_suggestions[ideaIdx] : null;
+      createProject(ann, idea);
+    }
+  });
+
+  async function runAnalyze(ann){
+    const workerUrl = getWorkerUrl();
+    if (!workerUrl){
+      alert('AI 분석을 하려면 설정에서 Worker 주소를 먼저 입력하세요. Worker 없이도 "수동 입력"으로 계속 사용할 수 있습니다.');
+      return;
+    }
+    if (!ann.text || ann.text.trim().length < 10){
+      alert('분석할 공고 원문이 너무 짧습니다. 공고 카드를 삭제하고 원문을 더 채워서 다시 등록해주세요.');
+      return;
+    }
+    const card = annList.querySelector('.ann-card[data-id="'+ann.id+'"]');
+    const btn = card ? card.querySelector('[data-action="analyze"]') : null;
+    if (btn){ btn.disabled = true; btn.textContent = '분석 중...'; }
+    try{
+      const res = await fetch(workerUrl, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          action:'analyze',
+          company: company,
+          announcementTitle: ann.title,
+          announcementText: ann.text
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error){
+        throw new Error(data.error || ('HTTP '+res.status));
+      }
+      ann.analysis = data;
+      save(LS_ANN, announcements);
+      renderAnnouncements();
+    }catch(err){
+      alert('AI 분석에 실패했습니다: ' + err.message);
+      if (btn){ btn.disabled = false; btn.textContent = 'AI로 분석하기'; }
+    }
+  }
+
+  // ---- Manual analysis modal ----
+  const analyzeModal = document.getElementById('analyzeModal');
+  function openManualAnalysis(ann){
+    const an = ann.analysis || {fit_level:'보통', fit_reasons:[], budget_max_text:'', deadline_text:'', consortium_required:'확인불가', university_allowed:'확인불가', summary:'', idea_suggestions:[]};
+    document.getElementById('analyzeModalTitle').textContent = '수동 입력: ' + ann.title;
+    document.getElementById('analyzeModalBody').innerHTML =
+      '<div class="field"><label>지원 가능성</label><select id="m-fit">'
+        + ['높음','보통','낮음'].map(v=>'<option value="'+v+'" '+(an.fit_level===v?'selected':'')+'>'+v+'</option>').join('')
+      + '</select></div>'
+      + '<div class="field-row"><div class="field"><label>사업비</label><input type="text" id="m-budget" value="'+esc(an.budget_max_text)+'" placeholder="예: 최대 5억원"></div>'
+      + '<div class="field"><label>마감일</label><input type="text" id="m-deadline" value="'+esc(an.deadline_text)+'" placeholder="예: 2026-09-30"></div></div>'
+      + '<div class="field-row"><div class="field"><label>컨소시엄 필요</label><select id="m-consortium">'
+        + ['필요','불필요','확인불가'].map(v=>'<option value="'+v+'" '+(an.consortium_required===v?'selected':'')+'>'+v+'</option>').join('')
+      + '</select></div>'
+      + '<div class="field"><label>대학 참여</label><select id="m-university">'
+        + ['가능','불가','확인불가'].map(v=>'<option value="'+v+'" '+(an.university_allowed===v?'selected':'')+'>'+v+'</option>').join('')
+      + '</select></div></div>'
+      + '<div class="field"><label>요약</label><textarea id="m-summary" placeholder="공고 핵심 내용 요약">'+esc(an.summary)+'</textarea></div>'
+      + '<div class="btn-row"><button class="btn" id="m-save">저장</button><button class="btn ghost" id="m-cancel">취소</button></div>';
+    analyzeModal.classList.remove('hidden');
+    document.getElementById('m-cancel').addEventListener('click', ()=> analyzeModal.classList.add('hidden'));
+    document.getElementById('m-save').addEventListener('click', ()=>{
+      ann.analysis = {
+        fit_level: document.getElementById('m-fit').value,
+        fit_reasons: an.fit_reasons || [],
+        budget_max_text: document.getElementById('m-budget').value.trim(),
+        deadline_text: document.getElementById('m-deadline').value.trim(),
+        consortium_required: document.getElementById('m-consortium').value,
+        university_allowed: document.getElementById('m-university').value,
+        summary: document.getElementById('m-summary').value.trim(),
+        idea_suggestions: an.idea_suggestions || []
+      };
+      save(LS_ANN, announcements);
+      analyzeModal.classList.add('hidden');
+      renderAnnouncements();
+    });
+  }
+
+  // ---------------- Projects ----------------
+  function createProject(ann, idea){
+    const existing = projects.find(p=>p.announcementId===ann.id && (!idea || p.ideaTitle===idea.title));
+    if (existing){
+      alert('이미 이 아이디어로 시작한 과제가 있습니다. 과제 파이프라인 탭에서 확인하세요.');
+      switchTab('projects');
+      return;
+    }
+    const p = {
+      id: uid(),
+      announcementId: ann.id,
+      title: ann.title,
+      stage: idea ? 'idea' : 'lead',
+      ideaTitle: idea ? idea.title : '',
+      ideaDescription: idea ? idea.description : '',
+      outline: [],
+      budget: { items: [] },
+      personnel: [],
+      checklist: DEFAULT_CHECKLIST.map(l=>({id:uid(), label:l, done:false})),
+      schedule: { startDate:'', endDate:'', milestones: [] },
+      reports: {
+        interim: {dueDate:'', status:'예정', memo:''},
+        annual: {dueDate:'', status:'예정', memo:''},
+        final: {dueDate:'', status:'예정', memo:''}
+      },
+      createdAt: Date.now()
+    };
+    projects.unshift(p);
+    save(LS_PROJ, projects);
+    renderProjects();
+    switchTab('projects');
+  }
+
+  function switchTab(key){
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===key));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.id==='tab-'+key));
+  }
+
+  const projList = document.getElementById('proj-list');
+  let openProjectIds = new Set();
+  let openSubtab = {}; // projectId -> subtab key
+
+  function fmtWon(v){
+    const n = Number(v)||0;
+    return n.toLocaleString('ko-KR') + '만원';
+  }
+
+  function renderProjects(){
+    if (projects.length === 0){
+      projList.innerHTML = '<div class="empty-hint">아직 진행중인 과제가 없습니다. "사업공고 분석" 탭에서 공고를 분석하고 과제를 시작해보세요.</div>';
+      return;
+    }
+    let html = '';
+    STAGES.forEach(stage=>{
+      const items = projects.filter(p=>p.stage===stage.key);
+      if (items.length === 0) return;
+      html += '<div class="stage-group"><div class="stage-group-title">'+stage.label+' <span class="count">'+items.length+'</span></div>';
+      items.forEach(p=>{ html += renderProjectCard(p); });
+      html += '</div>';
+    });
+    projList.innerHTML = html;
+    // re-attach dynamic listeners for open ones
+    openProjectIds.forEach(id=>{
+      const body = projList.querySelector('.proj-body[data-id="'+id+'"]');
+      if (body) body.classList.add('open');
+    });
+  }
+
+  function renderProjectCard(p){
+    const isOpen = openProjectIds.has(p.id);
+    return '<div class="proj-card">'
+      + '<div class="proj-head" data-toggle="'+p.id+'">'
+        + '<div><div class="t">'+esc(p.title)+(p.ideaTitle?(' · '+esc(p.ideaTitle)):'')+'</div>'
+        + '<div class="s">인력 '+p.personnel.length+'명 · 체크리스트 '+p.checklist.filter(c=>c.done).length+'/'+p.checklist.length+'</div></div>'
+        + '<select class="proj-stage-select" data-stage-select="'+p.id+'">'
+          + STAGES.map(s=>'<option value="'+s.key+'" '+(s.key===p.stage?'selected':'')+'>'+s.label+'</option>').join('')
+        + '</select>'
+      + '</div>'
+      + '<div class="proj-body'+(isOpen?' open':'')+'" data-id="'+p.id+'">'
+        + renderProjectBody(p)
+      + '</div>'
+    + '</div>';
+  }
+
+  function renderProjectBody(p){
+    const sub = openSubtab[p.id] || 'outline';
+    const subtabs = [
+      ['outline','목차'], ['budget','예산'], ['personnel','인력'],
+      ['checklist','체크리스트'], ['schedule','일정'], ['reports','보고서']
+    ];
+    let html = '<div class="subtabs">' + subtabs.map(([k,l])=>
+      '<button class="'+(sub===k?'active':'')+'" data-subtab="'+p.id+'" data-key="'+k+'">'+l+'</button>'
+    ).join('') + '</div>';
+
+    html += '<div class="subpanel active">';
+    if (sub === 'outline') html += renderOutlinePanel(p);
+    else if (sub === 'budget') html += renderBudgetPanel(p);
+    else if (sub === 'personnel') html += renderPersonnelPanel(p);
+    else if (sub === 'checklist') html += renderChecklistPanel(p);
+    else if (sub === 'schedule') html += renderSchedulePanel(p);
+    else if (sub === 'reports') html += renderReportsPanel(p);
+    html += '</div>';
+
+    html += '<div class="btn-row" style="margin-top:16px; border-top:1px solid var(--line); padding-top:14px;">'
+      + '<button class="btn small danger" data-action="delete-proj" data-id="'+p.id+'">과제 삭제</button>'
+    + '</div>';
+    return html;
+  }
+
+  function renderOutlinePanel(p){
+    let html = '';
+    if (p.outline.length === 0){
+      html += '<div class="empty-hint" style="padding:14px;">아직 사업계획서 목차가 없습니다.</div>';
+    } else {
+      html += p.outline.map((o,i)=>
+        '<div class="outline-item"><div class="o-title">'+(i+1)+'. '+esc(o.section)+'</div><div class="o-guide">'+esc(o.guide)+'</div></div>'
+      ).join('');
+    }
+    html += '<div class="btn-row"><button class="btn small secondary" data-action="ai-outline" data-id="'+p.id+'">AI로 목차 생성</button>'
+      + '<button class="btn small ghost" data-action="add-outline" data-id="'+p.id+'">직접 항목 추가</button></div>';
+    return html;
+  }
+
+  function renderBudgetPanel(p){
+    const items = p.budget.items;
+    let html = '<div class="table-wrap"><table><thead><tr><th>항목명</th><th>비목</th><th>재원</th><th>금액(만원)</th><th></th></tr></thead><tbody>';
+    items.forEach(it=>{
+      html += '<tr data-row="'+it.id+'">'
+        + '<td><input type="text" data-f="name" value="'+esc(it.name)+'"></td>'
+        + '<td><select data-f="category">'+BUDGET_CATEGORIES.map(c=>'<option '+(c===it.category?'selected':'')+'>'+c+'</option>').join('')+'</select></td>'
+        + '<td><select data-f="type">'+BUDGET_TYPES.map(t=>'<option '+(t===it.type?'selected':'')+'>'+t+'</option>').join('')+'</select></td>'
+        + '<td><input type="number" data-f="amount" value="'+(it.amount||0)+'"></td>'
+        + '<td><button class="row-del" data-action="del-budget" data-id="'+p.id+'" data-row="'+it.id+'">&times;</button></td>'
+      + '</tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<button class="btn small ghost" style="margin-top:10px;" data-action="add-budget" data-id="'+p.id+'">+ 예산 항목 추가</button>';
+
+    const total = items.reduce((s,i)=>s+(Number(i.amount)||0),0);
+    const gov = items.filter(i=>i.type==='정부지원금').reduce((s,i)=>s+(Number(i.amount)||0),0);
+    const cashSelf = items.filter(i=>i.type==='자기부담금(현금)').reduce((s,i)=>s+(Number(i.amount)||0),0);
+    const kindSelf = items.filter(i=>i.type==='자기부담금(현물)').reduce((s,i)=>s+(Number(i.amount)||0),0);
+    html += '<div class="budget-total"><span>총 사업비</span><b>'+fmtWon(total)+'</b></div>';
+    html += '<div class="budget-split">'
+      + '<div class="chip"><div class="k">정부지원금</div><div class="v">'+fmtWon(gov)+'</div></div>'
+      + '<div class="chip"><div class="k">자기부담(현금)</div><div class="v">'+fmtWon(cashSelf)+'</div></div>'
+      + '<div class="chip"><div class="k">자기부담(현물)</div><div class="v">'+fmtWon(kindSelf)+'</div></div>'
+    + '</div>';
+    return html;
+  }
+
+  function renderPersonnelPanel(p){
+    const items = p.personnel;
+    let html = '<div class="table-wrap"><table><thead><tr><th>이름</th><th>역할</th><th>소속</th><th>참여율(%)</th><th></th></tr></thead><tbody>';
+    items.forEach(it=>{
+      html += '<tr data-row="'+it.id+'">'
+        + '<td><input type="text" data-f="name" value="'+esc(it.name)+'"></td>'
+        + '<td><input type="text" data-f="role" value="'+esc(it.role)+'" placeholder="예: 연구책임자"></td>'
+        + '<td><input type="text" data-f="org" value="'+esc(it.org)+'" placeholder="예: 자사"></td>'
+        + '<td><input type="number" data-f="rate" value="'+(it.rate||0)+'"></td>'
+        + '<td><button class="row-del" data-action="del-personnel" data-id="'+p.id+'" data-row="'+it.id+'">&times;</button></td>'
+      + '</tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<button class="btn small ghost" style="margin-top:10px;" data-action="add-personnel" data-id="'+p.id+'">+ 참여인력 추가</button>';
+    const totalRate = items.reduce((s,i)=>s+(Number(i.rate)||0),0);
+    html += '<div class="budget-total"><span>총 참여인력</span><b>'+items.length+'명</b></div>';
+    if (items.length){
+      html += '<div class="status-line">참여율 합계: '+totalRate+'%'+(totalRate>100?' — 인당 연간 참여율 상한을 초과하지 않는지 확인하세요.':'')+'</div>';
+    }
+    return html;
+  }
+
+  function renderChecklistPanel(p){
+    let html = p.checklist.map(c=>
+      '<div class="checklist-item'+(c.done?' done':'')+'" data-row="'+c.id+'">'
+        + '<input type="checkbox" data-f="done" '+(c.done?'checked':'')+'>'
+        + '<span>'+esc(c.label)+'</span>'
+        + '<button class="row-del" data-action="del-check" data-id="'+p.id+'" data-row="'+c.id+'">&times;</button>'
+      + '</div>'
+    ).join('');
+    html += '<div class="btn-row" style="margin-top:10px;"><button class="btn small ghost" data-action="add-check" data-id="'+p.id+'">+ 체크 항목 추가</button></div>';
+    return html;
+  }
+
+  function renderSchedulePanel(p){
+    let html = '<div class="field-row">'
+      + '<div class="field"><label>과제 시작일</label><input type="date" data-f="startDate" value="'+esc(p.schedule.startDate)+'" data-action="sched-date" data-id="'+p.id+'"></div>'
+      + '<div class="field"><label>과제 종료일</label><input type="date" data-f="endDate" value="'+esc(p.schedule.endDate)+'" data-action="sched-date" data-id="'+p.id+'"></div>'
+    + '</div>';
+    html += '<button class="btn small secondary" data-action="gen-milestones" data-id="'+p.id+'">시작/종료일로 월별 일정 자동 생성</button>';
+    if (p.schedule.milestones.length){
+      html += '<div style="margin-top:12px;">' + p.schedule.milestones.map(m=>
+        '<div class="milestone-item" data-row="'+m.id+'">'
+          + '<span class="dot"></span><span class="m-label">'+esc(m.label)+'</span><span class="m-date">'+esc(m.date)+'</span>'
+          + '<button class="row-del" data-action="del-milestone" data-id="'+p.id+'" data-row="'+m.id+'">&times;</button>'
+        + '</div>'
+      ).join('') + '</div>';
+    }
+    html += '<div class="btn-row" style="margin-top:10px;"><button class="btn small ghost" data-action="add-milestone" data-id="'+p.id+'">+ 마일스톤 직접 추가</button></div>';
+    return html;
+  }
+
+  function renderReportsPanel(p){
+    const labels = {interim:'중간보고서', annual:'연차보고서', final:'최종보고서'};
+    let html = '';
+    ['interim','annual','final'].forEach(key=>{
+      const r = p.reports[key];
+      html += '<div class="report-box">'
+        + '<div class="r-head"><b>'+labels[key]+'</b>'
+          + '<select data-action="report-status" data-id="'+p.id+'" data-key="'+key+'">'
+            + ['예정','작성중','제출완료'].map(s=>'<option '+(s===r.status?'selected':'')+'>'+s+'</option>').join('')
+          + '</select>'
+        + '</div>'
+        + '<div class="field"><label>제출 기한</label><input type="date" value="'+esc(r.dueDate)+'" data-action="report-due" data-id="'+p.id+'" data-key="'+key+'"></div>'
+        + '<div class="field"><label>메모</label><input type="text" value="'+esc(r.memo)+'" data-action="report-memo" data-id="'+p.id+'" data-key="'+key+'" placeholder="작성 진행 메모"></div>'
+      + '</div>';
+    });
+    return html;
+  }
+
+  function findProj(id){ return projects.find(p=>p.id===id); }
+
+  // ---- Event delegation for project list ----
+  projList.addEventListener('click', async (e)=>{
+    const head = e.target.closest('[data-toggle]');
+    if (head && !e.target.closest('select')){
+      const id = head.dataset.toggle;
+      if (openProjectIds.has(id)) openProjectIds.delete(id); else openProjectIds.add(id);
+      renderProjects();
+      return;
+    }
+    const subtabBtn = e.target.closest('[data-subtab]');
+    if (subtabBtn){
+      openSubtab[subtabBtn.dataset.subtab] = subtabBtn.dataset.key;
+      renderProjects();
+      return;
+    }
+    const actionBtn = e.target.closest('[data-action]');
+    if (!actionBtn) return;
+    const action = actionBtn.dataset.action;
+    const id = actionBtn.dataset.id;
+    const p = findProj(id);
+    if (!p && action !== 'noop') return;
+
+    if (action === 'delete-proj'){
+      if (!confirm('이 과제를 삭제할까요?')) return;
+      projects = projects.filter(pr=>pr.id!==id);
+      save(LS_PROJ, projects);
+      renderProjects();
+    }
+    else if (action === 'add-outline'){
+      p.outline.push({section:'새 항목', guide:''});
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'ai-outline'){
+      const workerUrl = getWorkerUrl();
+      if (!workerUrl){ alert('AI 목차 생성을 하려면 설정에서 Worker 주소를 입력하세요. 그 전엔 "직접 항목 추가"로 목차를 만들 수 있습니다.'); return; }
+      const ann = announcements.find(a=>a.id===p.announcementId);
+      actionBtn.disabled = true; actionBtn.textContent = '생성 중...';
+      try{
+        const res = await fetch(workerUrl, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            action:'outline',
+            company: company,
+            announcementTitle: p.title,
+            announcementSummary: ann && ann.analysis ? ann.analysis.summary : '',
+            idea: { title: p.ideaTitle, description: p.ideaDescription }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || ('HTTP '+res.status));
+        p.outline = data.outline || [];
+        save(LS_PROJ, projects);
+        renderProjects();
+      }catch(err){
+        alert('AI 목차 생성에 실패했습니다: ' + err.message);
+        actionBtn.disabled = false; actionBtn.textContent = 'AI로 목차 생성';
+      }
+    }
+    else if (action === 'add-budget'){
+      p.budget.items.push({id:uid(), name:'', category:BUDGET_CATEGORIES[0], type:BUDGET_TYPES[0], amount:0});
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'del-budget'){
+      p.budget.items = p.budget.items.filter(i=>i.id!==actionBtn.dataset.row);
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'add-personnel'){
+      p.personnel.push({id:uid(), name:'', role:'', org:'', rate:0});
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'del-personnel'){
+      p.personnel = p.personnel.filter(i=>i.id!==actionBtn.dataset.row);
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'add-check'){
+      const label = prompt('체크리스트 항목명을 입력하세요.');
+      if (label) p.checklist.push({id:uid(), label, done:false});
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'del-check'){
+      p.checklist = p.checklist.filter(i=>i.id!==actionBtn.dataset.row);
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'gen-milestones'){
+      if (!p.schedule.startDate || !p.schedule.endDate){ alert('시작일/종료일을 먼저 입력하세요.'); return; }
+      const start = new Date(p.schedule.startDate);
+      const end = new Date(p.schedule.endDate);
+      if (isNaN(start) || isNaN(end) || end <= start){ alert('날짜를 확인해주세요.'); return; }
+      const milestones = [];
+      let cur = new Date(start);
+      let m = 1;
+      while (cur < end){
+        milestones.push({id:uid(), label: m+'차월 진행 점검', date: cur.toISOString().slice(0,10), status:'예정'});
+        cur.setMonth(cur.getMonth()+1);
+        m++;
+      }
+      milestones.push({id:uid(), label:'과제 종료', date: end.toISOString().slice(0,10), status:'예정'});
+      p.schedule.milestones = milestones;
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'add-milestone'){
+      const label = prompt('마일스톤명을 입력하세요.');
+      if (!label) return;
+      const date = prompt('날짜(YYYY-MM-DD)를 입력하세요.', new Date().toISOString().slice(0,10));
+      p.schedule.milestones.push({id:uid(), label, date: date||'', status:'예정'});
+      save(LS_PROJ, projects); renderProjects();
+    }
+    else if (action === 'del-milestone'){
+      p.schedule.milestones = p.schedule.milestones.filter(i=>i.id!==actionBtn.dataset.row);
+      save(LS_PROJ, projects); renderProjects();
+    }
+  });
+
+  projList.addEventListener('change', (e)=>{
+    const stageSel = e.target.closest('[data-stage-select]');
+    if (stageSel){
+      const p = findProj(stageSel.dataset.stageSelect);
+      if (p){ p.stage = stageSel.value; save(LS_PROJ, projects); renderProjects(); }
+      return;
+    }
+    const row = e.target.closest('tr[data-row], .checklist-item[data-row]');
+    if (row){
+      const projBody = e.target.closest('.proj-body');
+      const p = findProj(projBody.dataset.id);
+      if (!p) return;
+      const rowId = row.dataset.row;
+      const field = e.target.dataset.f;
+      if (!field) return;
+      const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+
+      let list = null;
+      const sub = openSubtab[p.id] || 'outline';
+      if (sub === 'budget') list = p.budget.items;
+      else if (sub === 'personnel') list = p.personnel;
+      else if (sub === 'checklist') list = p.checklist;
+      if (list){
+        const item = list.find(i=>i.id===rowId);
+        if (item){
+          item[field] = (field==='amount'||field==='rate') ? Number(value) : value;
+          save(LS_PROJ, projects);
+          if (sub === 'budget' || sub === 'personnel') renderProjects();
+          else {
+            row.classList.toggle('done', !!item.done);
+          }
+        }
+      }
+      return;
+    }
+    const schedInput = e.target.closest('[data-action="sched-date"]');
+    if (schedInput){
+      const p = findProj(schedInput.dataset.id);
+      if (p){ p.schedule[schedInput.dataset.f] = schedInput.value; save(LS_PROJ, projects); }
+      return;
+    }
+    const repStatus = e.target.closest('[data-action="report-status"]');
+    if (repStatus){
+      const p = findProj(repStatus.dataset.id);
+      if (p){ p.reports[repStatus.dataset.key].status = repStatus.value; save(LS_PROJ, projects); }
+      return;
+    }
+    const repDue = e.target.closest('[data-action="report-due"]');
+    if (repDue){
+      const p = findProj(repDue.dataset.id);
+      if (p){ p.reports[repDue.dataset.key].dueDate = repDue.value; save(LS_PROJ, projects); }
+      return;
+    }
+    const repMemo = e.target.closest('[data-action="report-memo"]');
+    if (repMemo){
+      const p = findProj(repMemo.dataset.id);
+      if (p){ p.reports[repMemo.dataset.key].memo = repMemo.value; save(LS_PROJ, projects); }
+      return;
+    }
+  });
+
+  // Outline item inline editing (contenteditable-lite: re-render on blur not needed since inputs used elsewhere;
+  // for outline we allow simple prompt-based edit via click on title)
+  projList.addEventListener('dblclick', (e)=>{
+    const item = e.target.closest('.outline-item');
+    if (!item) return;
+    const projBody = e.target.closest('.proj-body');
+    const p = findProj(projBody.dataset.id);
+    if (!p) return;
+    const idx = Array.from(item.parentNode.querySelectorAll('.outline-item')).indexOf(item);
+    const o = p.outline[idx];
+    if (!o) return;
+    const newSection = prompt('항목명', o.section);
+    if (newSection === null) return;
+    const newGuide = prompt('가이드 문구', o.guide);
+    o.section = newSection; o.guide = newGuide||'';
+    save(LS_PROJ, projects); renderProjects();
+  });
+
+  // ---------------- init ----------------
+  renderAnnouncements();
+  renderProjects();
+
+})();
+</script>
+</body>
+</html>
