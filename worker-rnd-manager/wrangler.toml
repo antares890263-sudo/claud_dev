@@ -1,0 +1,7 @@
+name = "rnd-manager-ai"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Workers AI 바인딩 — 별도 API 키/결제 등록 없이 무료 티어(하루 10,000 뉴런)로 LLM을 호출합니다.
+[ai]
+binding = "AI"
