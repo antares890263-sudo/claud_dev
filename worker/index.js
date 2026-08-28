@@ -75,13 +75,16 @@ function buildUserPrompt(payload) {
   });
 }
 
-// 모델이 코드펜스(```json ... ```)를 섞어 보내는 경우가 있어 파싱 전에 벗겨낸다.
-// 응답이 중간에 잘려 닫는 ```가 없는 경우에도 대응한다.
+// 모델이 JSON 앞뒤로 설명 문장이나 코드펜스를 섞어 보내는 경우가 많아,
+// 앞뒤 텍스트가 뭐든 상관없이 첫 '{'부터 마지막 '}'까지만 잘라내 파싱한다.
 function extractJson(text) {
-  let candidate = text.trim();
-  candidate = candidate.replace(/^```(?:json)?\s*/i, "");
-  candidate = candidate.replace(/```\s*$/, "");
-  return JSON.parse(candidate.trim());
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("응답에서 JSON 객체를 찾지 못함");
+  }
+  const candidate = text.slice(start, end + 1);
+  return JSON.parse(candidate);
 }
 
 export default {
@@ -160,7 +163,7 @@ export default {
       plan = extractJson(rawText);
     } catch {
       return new Response(
-        JSON.stringify({ error: "모델 응답을 JSON으로 해석하지 못했습니다.", raw: rawText.slice(0, 500) }),
+        JSON.stringify({ error: "모델 응답을 JSON으로 해석하지 못했습니다.", raw: rawText.slice(0, 1500) }),
         {
           status: 502,
           headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
