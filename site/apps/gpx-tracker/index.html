@@ -1782,38 +1782,44 @@ svg.leaflet-image-layer.leaflet-interactive path {
     goalPaceField.style.display = ''; goalTimeField.style.display = 'none';
   });
 
-  // Grade-Adjusted Pace: 오르막은 페이스가 느려지고, 내리막은 약간 빨라지되 너무 가파르면
-  // (부상 위험 때문에) 속도 이득을 제한한다. 계수는 트레일러닝에서 흔히 쓰는 경험적 근사치.
-  function gradeMultiplier(gradePercent){
+  // Grade-Adjusted Pace: 코칭 현장에서 흔히 쓰는 "경사 1%당 몇 초/km 가감" 방식.
+  // 오르막은 1%당 약 24초/km 느려지고, 내리막은 1%당 약 16초/km 빨라지되
+  // -12% 이상 급경사에서는 기술적 난이도 때문에 그 이점이 줄어든다.
+  function gradeAdjustSecPerKm(gradePercent){
     if (gradePercent >= 0){
-      return 1 + gradePercent * 0.033;
+      return gradePercent * 24;
     }
-    const g = Math.max(gradePercent, -20); // -20% 이상 가파른 내리막은 더 이상 빨라지지 않는다고 가정
-    return Math.max(1 + g * 0.012, 0.85); // 최대 15% 정도까지만 빨라짐
+    if (gradePercent >= -12){
+      return gradePercent * 16;
+    }
+    // -12%를 넘는 급한 내리막은 이득이 서서히 줄어든다 (부상 위험/기술적 난이도 반영).
+    const capped = Math.max(gradePercent, -30);
+    return -192 + (capped + 12) * 6.4;
   }
 
   // 세그먼트별 목표 페이스/누적시간을 코드로 직접 계산한다 (LLM이 숫자를 만들지 않음 → 항상 정확).
-  // target_time 모드에서는 각 구간 가중치(거리×경사보정)에 비례 배분해서, 총합이 목표 완주시간과 정확히 일치하도록 스케일링한다.
+  // 평지 기준 페이스(base)를 먼저 구하고, 그 위에 구간별 경사 보정을 더하는 방식이라
+  // 오르막 비중이 크다고 해서 평지 구간까지 부당하게 느려지지 않는다.
+  // target_time 모드에서는 base를 역산해서 전체 합이 목표 완주시간과 정확히 일치하도록 만든다.
   function computePaceTargets(segments, goal){
+    const totalDistance = segments.reduce((a, s) => a + s.distanceKm, 0) || 1;
+    const adjustments = segments.map(s => gradeAdjustSecPerKm(s.avgGradePercent));
+
+    let baseSecPerKm;
     if (goal.type === 'flat_pace'){
-      const baseSecPerKm = goal.flat_pace_min_per_km * 60;
-      let cumSec = 0;
-      return segments.map(s => {
-        const segPaceSec = baseSecPerKm * gradeMultiplier(s.avgGradePercent);
-        cumSec += segPaceSec * s.distanceKm;
-        return { target_pace_min_per_km: segPaceSec / 60, target_cumulative_seconds: cumSec };
-      });
+      baseSecPerKm = goal.flat_pace_min_per_km * 60;
+    } else {
+      const targetTotalSec = goal.target_time_minutes * 60;
+      const weightedAdjustSum = segments.reduce((a, s, i) => a + adjustments[i] * s.distanceKm, 0);
+      baseSecPerKm = (targetTotalSec - weightedAdjustSum) / totalDistance;
     }
-    // target_time
-    const targetTotalSec = goal.target_time_minutes * 60;
-    const weights = segments.map(s => s.distanceKm * gradeMultiplier(s.avgGradePercent));
-    const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
-    const scale = targetTotalSec / totalWeight;
+
     let cumSec = 0;
     return segments.map((s, i) => {
-      const segTimeSec = weights[i] * scale;
-      cumSec += segTimeSec;
-      return { target_pace_min_per_km: (segTimeSec / s.distanceKm) / 60, target_cumulative_seconds: cumSec };
+      // 아무리 급한 내리막이라도 base의 절반보다 빨라지지는 않게 안전 하한을 둔다.
+      const segPaceSec = Math.max(baseSecPerKm + adjustments[i], baseSecPerKm * 0.5, 60);
+      cumSec += segPaceSec * s.distanceKm;
+      return { target_pace_min_per_km: segPaceSec / 60, target_cumulative_seconds: cumSec };
     });
   }
 
