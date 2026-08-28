@@ -37,26 +37,23 @@ function corsHeaders(origin) {
 // 뉴런 소모가 커져서 하루 무료 한도를 더 빨리 씀.
 const MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 
-const SYSTEM_PROMPT = `너는 트레일 러닝 페이스 코치다. 사용자가 업로드한 GPX 코스를 구간으로 나눈 데이터와,
-사용자의 목표/컨디션을 받는다. 각 구간마다 목표 페이스(분/km)와 목표 통과 누적시간(초),
-그리고 한 줄짜리 코칭 코멘트를 만들어야 한다.
+const SYSTEM_PROMPT = `너는 트레일 러닝 페이스 코치다. 사용자가 업로드한 GPX 코스를 구간으로 나눈 데이터를 받는데,
+각 구간의 거리·경사·이미 계산된 목표 페이스·목표 통과시간이 전부 함께 주어진다 (이 숫자들은 이미 정확하게 계산되어 있으니 절대 다시 계산하거나 바꾸지 마라).
+
+너의 역할은 딱 하나, 각 구간마다 한 줄짜리 코칭 코멘트(note)를 쓰는 것이다. 예:
+- 오르막이 심한 구간이면 "여기서 오버페이스하지 말고 걷기 섞어서 가세요"
+- 완만한 구간이면 "리듬 유지하며 페이스대로"
+- 급한 내리막이면 "무릎 부담 주의, 보폭 짧게"
+- 사용자가 적은 컨디션/메모(예: 무릎이 약함, 초보 등)가 있으면 관련 구간에서 반영해라.
 
 규칙:
-- 오르막 구간은 경사도에 비례해 페이스가 느려져야 한다 (Grade-Adjusted Pace 개념 참고).
-- 내리막이 너무 가파르면(예: -15% 이상) 부상 위험 때문에 무리하게 빠른 페이스를 주지 않는다.
-- 레이스 초반 구간은 사용자가 목표 페이스보다 오버페이스하지 않도록 보수적으로 잡는다.
-- 절대로 코드(Python 등)를 작성하지 마라. 절대로 풀이 과정이나 설명 문장을 쓰지 마라.
+- 절대로 코드(Python 등)를 작성하지 마라. 절대로 숫자를 계산하는 풀이 과정을 쓰지 마라.
 - 오직 지정된 JSON 객체 하나만 응답으로 출력해라. 응답의 첫 글자는 반드시 { 여야 한다.
 
 응답은 반드시 아래 JSON 형식 그대로여야 한다 (다른 필드 추가 금지):
 {
   "segments": [
-    {
-      "index": 0,
-      "target_pace_min_per_km": 6.2,
-      "target_cumulative_seconds": 372,
-      "note": "완만한 구간, 목표 페이스 유지"
-    }
+    { "index": 0, "note": "완만한 구간, 목표 페이스 유지" }
   ],
   "overall_note": "전체 레이스에 대한 한두 문장 코멘트"
 }`;
@@ -69,15 +66,15 @@ function buildUserPrompt(payload) {
       index: s.index,
       distance_km: s.distanceKm,
       cumulative_distance_km: s.cumulativeDistanceKm,
-      elevation_gain_m: s.elevationGainM,
-      elevation_loss_m: s.elevationLossM,
       avg_grade_percent: s.avgGradePercent,
+      already_computed_target_pace_min_per_km: s.targetPaceMinPerKm,
+      already_computed_target_cumulative_seconds: s.targetCumulativeSeconds,
     })),
   });
 }
 
 // 구조화된 출력 스키마 — 이걸 강제하면 모델이 코드/설명 등으로 딴 길로 새지 못하고
-// 정확히 이 형식의 JSON만 만들어낸다.
+// 정확히 이 형식의 JSON만 만들어낸다. 숫자는 요구하지 않는다 (전부 서버/클라이언트 계산값 사용).
 const RESPONSE_JSON_SCHEMA = {
   type: "object",
   properties: {
@@ -87,11 +84,9 @@ const RESPONSE_JSON_SCHEMA = {
         type: "object",
         properties: {
           index: { type: "number" },
-          target_pace_min_per_km: { type: "number" },
-          target_cumulative_seconds: { type: "number" },
           note: { type: "string" },
         },
-        required: ["index", "target_pace_min_per_km", "target_cumulative_seconds", "note"],
+        required: ["index", "note"],
       },
     },
     overall_note: { type: "string" },

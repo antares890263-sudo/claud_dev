@@ -1019,12 +1019,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="action" id="exportInputBtn" style="display:none;">① 입력 파일 내보내기</button>
       <button class="action" id="loadPlanFileBtn" style="display:none; margin-top:8px;">③ 저장된 계획 불러오기</button>
       <div class="status-line" id="planStatus"></div>
-
-      <div id="planResult" style="display:none; margin-top:14px;">
-        <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
-        <div id="planTable"></div>
-        <button class="action" id="startRaceBtn" style="margin-top:12px; background:var(--marker);">레이스 시작</button>
-      </div>
     </div>
   </div>
 
@@ -1071,6 +1065,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
 
     <div class="candidates" id="candidates"></div>
+
+    <div class="panel" id="planResult" style="display:none; margin-top:16px;">
+      <h2>레이스 페이스 계획 결과</h2>
+      <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
+      <div id="planTable"></div>
+      <button class="action" id="startRaceBtn" style="margin-top:12px; background:var(--marker);">레이스 시작</button>
+    </div>
   </div>
 </main>
 
@@ -1249,8 +1250,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     standard: {
       label: '일반',
       providers: [
-        { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', maxZoom: 20, subdomains: 'abcd', label: 'CARTO Voyager', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
-        { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, subdomains: 'abc', label: 'OpenStreetMap', attribution: '&copy; OpenStreetMap contributors' }
+        { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, subdomains: 'abc', label: 'OpenStreetMap', attribution: '&copy; OpenStreetMap contributors' },
+        { url: 'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png', maxZoom: 19, label: 'Wikimedia Maps', attribution: '&copy; OpenStreetMap contributors, Wikimedia' }
       ]
     },
     topo: {
@@ -1780,6 +1781,41 @@ svg.leaflet-image-layer.leaflet-interactive path {
     goalPaceField.style.display = ''; goalTimeField.style.display = 'none';
   });
 
+  // Grade-Adjusted Pace: 오르막은 페이스가 느려지고, 내리막은 약간 빨라지되 너무 가파르면
+  // (부상 위험 때문에) 속도 이득을 제한한다. 계수는 트레일러닝에서 흔히 쓰는 경험적 근사치.
+  function gradeMultiplier(gradePercent){
+    if (gradePercent >= 0){
+      return 1 + gradePercent * 0.033;
+    }
+    const g = Math.max(gradePercent, -20); // -20% 이상 가파른 내리막은 더 이상 빨라지지 않는다고 가정
+    return Math.max(1 + g * 0.012, 0.85); // 최대 15% 정도까지만 빨라짐
+  }
+
+  // 세그먼트별 목표 페이스/누적시간을 코드로 직접 계산한다 (LLM이 숫자를 만들지 않음 → 항상 정확).
+  // target_time 모드에서는 각 구간 가중치(거리×경사보정)에 비례 배분해서, 총합이 목표 완주시간과 정확히 일치하도록 스케일링한다.
+  function computePaceTargets(segments, goal){
+    if (goal.type === 'flat_pace'){
+      const baseSecPerKm = goal.flat_pace_min_per_km * 60;
+      let cumSec = 0;
+      return segments.map(s => {
+        const segPaceSec = baseSecPerKm * gradeMultiplier(s.avgGradePercent);
+        cumSec += segPaceSec * s.distanceKm;
+        return { target_pace_min_per_km: segPaceSec / 60, target_cumulative_seconds: cumSec };
+      });
+    }
+    // target_time
+    const targetTotalSec = goal.target_time_minutes * 60;
+    const weights = segments.map(s => s.distanceKm * gradeMultiplier(s.avgGradePercent));
+    const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+    const scale = targetTotalSec / totalWeight;
+    let cumSec = 0;
+    return segments.map((s, i) => {
+      const segTimeSec = weights[i] * scale;
+      cumSec += segTimeSec;
+      return { target_pace_min_per_km: (segTimeSec / s.distanceKm) / 60, target_cumulative_seconds: cumSec };
+    });
+  }
+
   function computeSegments(intervalKm){
     const intervalM = intervalKm * 1000;
     const segments = [];
@@ -1813,21 +1849,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
 
   function renderPlan(plan){
-    // 모델이 거리/누적거리 필드를 빠뜨리거나 다른 이름으로 보내는 경우가 있어,
-    // 거리 관련 값은 우리가 이미 정확히 계산해둔 lastComputedSegments를 신뢰하고,
-    // 모델 응답에서는 페이스/통과시간/코멘트만 가져온다.
+    // 거리·페이스·통과시간은 전부 우리가 직접 계산한 lastComputedSegments 값을 쓴다 (항상 정확).
+    // 모델 응답에서는 코칭 코멘트(note)만 가져온다.
     const modelSegments = Array.isArray(plan.segments) ? plan.segments : [];
     const merged = lastComputedSegments.map((own, i) => {
       const m = modelSegments[i] || {};
-      const targetSeconds = Number(m.target_cumulative_seconds);
-      const targetPace = Number(m.target_pace_min_per_km);
       return {
         index: i,
         distanceKm: own.distanceKm,
         cumulative_distance_km: own.cumulativeDistanceKm,
         avg_grade_percent: own.avgGradePercent,
-        target_pace_min_per_km: isFinite(targetPace) ? targetPace : null,
-        target_cumulative_seconds: isFinite(targetSeconds) ? targetSeconds : null,
+        target_pace_min_per_km: own.targetPaceMinPerKm,
+        target_cumulative_seconds: own.targetCumulativeSeconds,
         note: typeof m.note === 'string' ? m.note : ''
       };
     });
@@ -1892,6 +1925,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       }
       goal = { type: 'flat_pace', flat_pace_min_per_km: pace, notes: goalNotesInput.value.trim() };
     }
+    // 페이스/통과시간은 코드로 직접 계산해서 각 구간에 붙여둔다 — 모델에게는 참고용으로 넘기고,
+    // 실제 화면 표시는 항상 이 값을 쓴다 (모델이 숫자를 지어내지 못하게).
+    const paceTargets = computePaceTargets(segments, goal);
+    segments.forEach((s, i) => {
+      s.targetPaceMinPerKm = +paceTargets[i].target_pace_min_per_km.toFixed(2);
+      s.targetCumulativeSeconds = Math.round(paceTargets[i].target_cumulative_seconds);
+    });
     planStatus.classList.remove('warn');
     return { segments, goal };
   }
