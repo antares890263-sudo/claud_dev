@@ -884,9 +884,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     font-size:20px; cursor:pointer; touch-action:manipulation;
   }
   .glance-label{ font-size:16px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.6); margin-bottom:6px; }
-  .glance-value{ font-family:'IBM Plex Mono',monospace; font-size:96px; font-weight:700; line-height:1; margin-bottom:28px; }
+  .glance-value{ font-family:'IBM Plex Mono',monospace; font-size:96px; font-weight:700; line-height:1; margin-bottom:20px; }
   .glance-value.behind{ color:#FF6B57; }
   .glance-value.ahead{ color:#7CD992; }
+  .glance-mini-profile{ width:100%; max-width:340px; height:64px; margin-bottom:22px; }
+  .glance-mini-profile svg{ width:100%; height:100%; display:block; }
   .glance-row{ display:flex; gap:36px; margin-bottom:22px; }
   .glance-mini-label{ font-size:12px; color:rgba(255,255,255,0.55); text-transform:uppercase; letter-spacing:0.06em; }
   .glance-mini-value{ font-family:'IBM Plex Mono',monospace; font-size:32px; font-weight:600; margin-top:4px; }
@@ -1117,14 +1119,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button id="glanceCloseBtn" class="glance-close" aria-label="글랜스 모드 닫기">✕</button>
   <div class="glance-label" id="glanceStatusLabel">페이스 상태</div>
   <div class="glance-value" id="glanceDeltaValue">–</div>
+  <div class="glance-mini-profile" id="glanceMiniProfile"></div>
   <div class="glance-row">
     <div class="glance-mini">
       <div class="glance-mini-label">다음 구간까지</div>
       <div class="glance-mini-value" id="glanceNextDist">–</div>
     </div>
     <div class="glance-mini">
-      <div class="glance-mini-label">이번 구간 상승</div>
-      <div class="glance-mini-value" id="glanceClimb">–</div>
+      <div class="glance-mini-label" id="glanceNextClimbLabel">다음 오르막까지</div>
+      <div class="glance-mini-value" id="glanceNextClimb">–</div>
     </div>
   </div>
   <div class="glance-note" id="glanceNote"></div>
@@ -1618,6 +1621,66 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return deltaSeconds <= 0 ? `목표보다 ${timeStr} 여유` : `목표보다 ${timeStr} 지연`;
   }
 
+  // 현재 위치 기준, 완만한 구간에 있으면 앞으로 얼마나 가야 오르막(경사 3% 이상)이 시작되는지,
+  // 이미 오르막 중이면 그 오르막이 몇 m 남았는지 계산한다.
+  function computeClimbInfo(currentDistM){
+    if (!points.length) return null;
+    const THRESHOLD_GRADE = 3;
+    const WINDOW_M = 100;
+
+    function gradeFrom(idx){
+      const startDist = points[idx].dist, startEle = points[idx].ele;
+      let j = idx;
+      while (j < points.length - 1 && points[j].dist - startDist < WINDOW_M) j++;
+      const distDelta = points[j].dist - startDist;
+      if (distDelta < 10) return 0;
+      return ((points[j].ele - startEle) / distDelta) * 100;
+    }
+
+    let startIdx = points.findIndex(p => p.dist >= currentDistM);
+    if (startIdx === -1) return null;
+
+    if (gradeFrom(startIdx) >= THRESHOLD_GRADE){
+      let j = startIdx;
+      while (j < points.length - 1 && gradeFrom(j) >= THRESHOLD_GRADE) j += 5;
+      const endDist = points[Math.min(j, points.length - 1)].dist;
+      return { climbing: true, distanceM: Math.max(0, Math.round(endDist - currentDistM)) };
+    }
+    let j = startIdx;
+    while (j < points.length - 1 && gradeFrom(j) < THRESHOLD_GRADE) j += 5;
+    if (j >= points.length - 1) return { climbing: false, distanceM: null };
+    return { climbing: false, distanceM: Math.max(0, Math.round(points[j].dist - currentDistM)) };
+  }
+
+  // 현재 위치부터 앞으로 windowM(기본 2km) 구간의 고도 실루엣을 작은 SVG로 그린다.
+  function buildMiniProfileSvg(currentDistM, windowM){
+    windowM = windowM || 2000;
+    const rangePts = points.filter(p => p.dist >= currentDistM && p.dist <= currentDistM + windowM);
+    if (rangePts.length < 2) return '';
+
+    const eles = rangePts.map(p => p.ele);
+    const minEle = Math.min(...eles), maxEle = Math.max(...eles);
+    const eleRange = (maxEle - minEle) || 1;
+    const W = 320, H = 64, PAD = 4;
+
+    const coords = rangePts.map(p => {
+      const x = ((p.dist - currentDistM) / windowM) * W;
+      const y = H - PAD - ((p.ele - minEle) / eleRange) * (H - PAD * 2);
+      return [x, y];
+    });
+
+    let pathD = `M ${coords[0][0].toFixed(1)},${H} `;
+    coords.forEach(([x, y]) => { pathD += `L ${x.toFixed(1)},${y.toFixed(1)} `; });
+    pathD += `L ${coords[coords.length - 1][0].toFixed(1)},${H} Z`;
+
+    const curX = coords[0][0], curY = coords[0][1];
+
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${pathD}" fill="rgba(124,217,146,0.18)" stroke="#7CD992" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${curX.toFixed(1)}" cy="${curY.toFixed(1)}" r="5" fill="#3D6E8F" stroke="#fff" stroke-width="2"/>
+    </svg>`;
+  }
+
   function updateGlanceDisplay(deltaSeconds, segIdx, distKm){
     const absSec = Math.abs(Math.round(deltaSeconds));
     const mm = Math.floor(absSec / 60), ss = absSec % 60;
@@ -1633,9 +1696,28 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const seg = lastComputedSegments[segIdx];
       const distToNext = Math.max(seg.cumulativeDistanceKm - distKm, 0);
       document.getElementById('glanceNextDist').textContent = distToNext.toFixed(1) + 'km';
-      document.getElementById('glanceClimb').textContent = '+' + seg.elevationGainM + 'm';
       const note = (pacePlan && pacePlan.segments[segIdx]) ? pacePlan.segments[segIdx].note : '';
       document.getElementById('glanceNote').textContent = note || '';
+    }
+
+    const distM = distKm * 1000;
+    const profileEl = document.getElementById('glanceMiniProfile');
+    if (profileEl) profileEl.innerHTML = buildMiniProfileSvg(distM, 2000);
+
+    const climbInfo = computeClimbInfo(distM);
+    const climbLabelEl = document.getElementById('glanceNextClimbLabel');
+    const climbValueEl = document.getElementById('glanceNextClimb');
+    if (climbInfo && climbLabelEl && climbValueEl){
+      if (climbInfo.climbing){
+        climbLabelEl.textContent = '이 오르막 남은 거리';
+        climbValueEl.textContent = climbInfo.distanceM + 'm';
+      } else if (climbInfo.distanceM != null){
+        climbLabelEl.textContent = '다음 오르막까지';
+        climbValueEl.textContent = climbInfo.distanceM + 'm';
+      } else {
+        climbLabelEl.textContent = '다음 오르막까지';
+        climbValueEl.textContent = '없음';
+      }
     }
   }
 
