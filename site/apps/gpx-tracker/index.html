@@ -1084,7 +1084,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <h2>레이스 페이스 계획 결과</h2>
       <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
       <div id="planTable"></div>
-      <button class="action" id="glanceModeBtn" style="margin-top:10px; background:var(--sky);">글랜스 모드 미리보기</button>
       <button class="action" id="startRaceBtn" style="margin-top:10px; background:var(--marker);">레이스 시작</button>
       <p class="hint" style="margin-top:6px;">누르면 GPS 추적 + 글랜스 모드가 한 번에 시작됩니다. 진행 중에 다시 누르면 글랜스 모드만 다시 열립니다 (레이스는 끝나지 않음).</p>
       <a href="#" id="endRaceBtn" style="display:none; font-size:12px; color:var(--ink-soft); margin-top:6px;">레이스 종료</a>
@@ -2204,9 +2203,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   });
 
   const glanceOverlay = document.getElementById('glanceOverlay');
-  document.getElementById('glanceModeBtn').addEventListener('click', () => {
-    glanceOverlay.style.display = 'flex';
-  });
   document.getElementById('glanceCloseBtn').addEventListener('click', () => {
     glanceOverlay.style.display = 'none';
   });
