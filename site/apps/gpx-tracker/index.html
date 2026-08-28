@@ -970,42 +970,37 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
 
     <div class="panel">
-      <h2>2. 위치 확인 방식</h2>
-      <div class="mode-toggle">
-        <button id="modeGpsBtn" class="active">GPS 자동</button>
-        <button id="modeAltBtn">고도 입력</button>
-      </div>
+      <h2>2. 실시간 안내 설정</h2>
+      <p class="hint">"레이스 시작" 버튼을 누르면 위치 추적이 자동으로 켜집니다. 여기서는 안내 방식만 미리 설정해두세요.</p>
+      <div class="status-line" id="gpsStatus"></div>
 
-      <div id="gpsControls">
-        <p class="hint">기기의 위치 센서로 실시간 내 위치(파란 점)를 표시하고, 지도가 자동으로 따라갑니다. 트랙 위 가장 가까운 지점(빨간 점)도 함께 보여줍니다. 지도를 직접 움직이면 자동 추적이 잠시 꺼지며, 오른쪽 아래 버튼으로 다시 켤 수 있습니다.</p>
-        <button class="action" id="startGpsBtn">위치 추적 시작</button>
-        <div class="status-line" id="gpsStatus"></div>
-
-        <div style="display:flex; gap:16px; align-items:center; margin-top:12px; flex-wrap:wrap;">
-          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
-            <input type="checkbox" id="voiceToggle" checked> 음성 안내
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
-            <input type="checkbox" id="vibrateToggle" checked> 진동
-          </label>
-        </div>
-        <p class="hint" style="margin-top:6px;">레이스 중 구간이 바뀔 때마다 "OOkm 통과, 목표보다 X분 지연/여유"를 자동으로 읽어주고 진동으로도 알려줍니다.</p>
-        <button class="action" id="testAnnounceBtn" style="margin-top:8px; background:var(--ink-soft);">안내 테스트</button>
+      <div style="display:flex; gap:16px; align-items:center; margin-top:10px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
+          <input type="checkbox" id="voiceToggle" checked> 음성 안내
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
+          <input type="checkbox" id="vibrateToggle" checked> 진동
+        </label>
       </div>
+      <p class="hint" style="margin-top:6px;">레이스 중 구간이 바뀔 때마다 "OOkm 통과, 목표보다 X분 지연/여유"를 자동으로 읽어주고 진동으로도 알려줍니다.</p>
+      <button class="action" id="testAnnounceBtn" style="margin-top:8px; background:var(--ink-soft);">안내 테스트</button>
 
       <div style="margin-top:10px;">
         <button class="action" id="glanceModeBtn" style="background:var(--sky);">글랜스 모드 (달리면서 보기)</button>
       </div>
 
-      <div id="altControls" style="display:none;">
-        <div class="field">
-          <label for="altInput">현재 고도 (m) — 고도계/시계 값 입력</label>
-          <input type="number" id="altInput" placeholder="예: 842">
+      <details style="margin-top:14px;">
+        <summary style="font-size:12px; color:var(--ink-soft); cursor:pointer;">GPS가 안 잡힐 때 — 고도로 위치 찾기</summary>
+        <div id="altControls" style="margin-top:10px;">
+          <div class="field">
+            <label for="altInput">현재 고도 (m) — 고도계/시계 값 입력</label>
+            <input type="number" id="altInput" placeholder="예: 842">
+          </div>
+          <button class="action" id="findAltBtn">트랙에서 위치 찾기</button>
+          <p class="hint">같은 고도가 트랙에 여러 번 나올 수 있습니다 (오르막·내리막, 왕복 코스 등). 아래 후보 지점 중 실제 진행 방향에 맞는 곳을 선택하세요.</p>
+          <div class="status-line" id="altStatus"></div>
         </div>
-        <button class="action" id="findAltBtn">트랙에서 위치 찾기</button>
-        <p class="hint">같은 고도가 트랙에 여러 번 나올 수 있습니다 (오르막·내리막, 왕복 코스 등). 아래 후보 지점 중 실제 진행 방향에 맞는 곳을 선택하세요.</p>
-        <div class="status-line" id="altStatus"></div>
-      </div>
+      </details>
     </div>
 
     <div class="panel">
@@ -1113,7 +1108,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
       <div id="planTable"></div>
       <button class="action" id="startRaceBtn" style="margin-top:12px; background:var(--marker);">레이스 시작</button>
-      <p class="hint" style="margin-top:6px;">누르면 GPS 추적 + 글랜스 모드가 한 번에 시작됩니다.</p>
+      <p class="hint" style="margin-top:6px;">누르면 GPS 추적 + 글랜스 모드가 한 번에 시작됩니다. 진행 중에 다시 누르면 글랜스 모드만 다시 열립니다 (레이스는 끝나지 않음).</p>
+      <a href="#" id="endRaceBtn" style="display:none; font-size:12px; color:var(--ink-soft); margin-top:6px;">레이스 종료</a>
     </div>
   </div>
 </main>
@@ -1183,7 +1179,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   let raceStartTime = null;
   let chart;
   let watchId = null;
-  let mode = 'gps';
 
   // ---------- geo helpers ----------
   function haversine(a, b){
@@ -1799,33 +1794,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return pts[pts.length - 1].t;
   }
 
-  // ---------- mode toggle ----------
-  const modeGpsBtn = document.getElementById('modeGpsBtn');
-  const modeAltBtn = document.getElementById('modeAltBtn');
-  const gpsControls = document.getElementById('gpsControls');
-  const altControls = document.getElementById('altControls');
-
-  modeGpsBtn.addEventListener('click', () => {
-    mode = 'gps';
-    modeGpsBtn.classList.add('active'); modeAltBtn.classList.remove('active');
-    gpsControls.style.display = ''; altControls.style.display = 'none';
-  });
-  modeAltBtn.addEventListener('click', () => {
-    mode = 'alt';
-    modeAltBtn.classList.add('active'); modeGpsBtn.classList.remove('active');
-    altControls.style.display = ''; gpsControls.style.display = 'none';
-    if (watchId !== null){
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      startGpsBtn.textContent = '위치 추적 시작';
-      clearLiveMarker();
-      releaseWakeLock();
-      document.getElementById('followBtn').style.display = 'none';
-    }
-  });
-
   // ---------- GPS mode ----------
-  const startGpsBtn = document.getElementById('startGpsBtn');
   const gpsStatus = document.getElementById('gpsStatus');
 
   async function requestWakeLock(){
@@ -1878,7 +1847,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       return false;
     }
     if (watchId !== null) return true; // already tracking
-    startGpsBtn.textContent = '위치 추적 중지';
     document.getElementById('followBtn').style.display = 'flex';
     setFollowMode(true);
     requestWakeLock();
@@ -1902,17 +1870,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if (watchId === null) return;
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
-    startGpsBtn.textContent = '위치 추적 시작';
     gpsStatus.textContent = '추적을 중지했습니다.';
     clearLiveMarker();
     releaseWakeLock();
     document.getElementById('followBtn').style.display = 'none';
   }
-
-  startGpsBtn.addEventListener('click', () => {
-    if (points.length === 0){ alert('먼저 GPX 파일을 업로드하세요.'); return; }
-    if (watchId !== null){ stopGpsTracking(); } else { startGpsTracking(); }
-  });
 
   // ---------- Altitude mode ----------
   const findAltBtn = document.getElementById('findAltBtn');
@@ -2302,19 +2264,30 @@ svg.leaflet-image-layer.leaflet-interactive path {
   startRaceBtn.addEventListener('click', () => {
     if (!pacePlan){ return; }
     if (raceActive){
-      raceActive = false;
-      raceStartTime = null;
-      startRaceBtn.textContent = '레이스 시작';
-      document.getElementById('raceDeltaBar').style.display = 'none';
+      // 이미 진행 중이면, 다시 눌러도 레이스를 끝내지 않는다 — GPS 추적을 보장하고 글랜스 모드만 다시 연다.
+      startGpsTracking();
+      document.getElementById('glanceOverlay').style.display = 'flex';
     } else {
       if (points.length === 0){ alert('먼저 GPX 파일을 업로드하세요.'); return; }
       raceActive = true;
       raceStartTime = Date.now();
       lastAnnouncedSegmentIndex = -1;
-      startRaceBtn.textContent = '레이스 중지';
+      startRaceBtn.textContent = '글랜스 모드 다시 보기';
+      document.getElementById('endRaceBtn').style.display = 'inline-block';
       startGpsTracking();
       document.getElementById('glanceOverlay').style.display = 'flex';
     }
+  });
+
+  document.getElementById('endRaceBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    raceActive = false;
+    raceStartTime = null;
+    startRaceBtn.textContent = '레이스 시작';
+    document.getElementById('endRaceBtn').style.display = 'none';
+    document.getElementById('raceDeltaBar').style.display = 'none';
+    stopGpsTracking();
+    glanceOverlay.style.display = 'none';
   });
 
   // ---------- 음성 안내 테스트 & 글랜스 모드 ----------
