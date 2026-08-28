@@ -952,6 +952,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="subtitle">구글맵이 못 해주는 것 — GPX 트랙 위에서 GPS 좌표 또는 실측 고도값으로 현재 위치를 찾아줍니다.</div>
 </header>
 
+<div style="max-width:1180px; margin:0 auto; padding:0 24px;">
+  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; padding:14px 16px; border:1.5px solid var(--ink); border-radius:var(--radius); background:rgba(255,255,255,0.55); margin-top:18px;">
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
+      <input type="checkbox" id="voiceToggle" checked> 음성 안내
+    </label>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
+      <input type="checkbox" id="vibrateToggle" checked> 진동
+    </label>
+    <button class="action" id="testAnnounceBtn" style="width:auto; padding:8px 14px; background:var(--ink-soft); margin:0;">안내 테스트</button>
+    <span class="hint" style="margin:0;">레이스 중 구간이 바뀔 때마다 자동으로 읽어주고 진동으로도 알려줍니다.</span>
+  </div>
+</div>
+
 <main>
   <!-- LEFT PANEL -->
   <div>
@@ -967,27 +980,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="status-line warn" id="uploadError" style="display:none;"></div>
       <div class="hint" id="restoredNotice" style="display:none; margin-top:6px;"></div>
       <a href="#" id="clearSavedBtn" style="display:none; font-size:11.5px; color:var(--ink-soft); margin-top:4px;">저장된 트랙·계획 지우기</a>
-    </div>
 
-    <div class="panel">
-      <h2>2. 실시간 안내 설정</h2>
-      <p class="hint">"레이스 시작" 버튼을 누르면 위치 추적이 자동으로 켜집니다. 여기서는 안내 방식만 미리 설정해두세요.</p>
-      <div class="status-line" id="gpsStatus"></div>
-
-      <div style="display:flex; gap:16px; align-items:center; margin-top:10px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
-          <input type="checkbox" id="voiceToggle" checked> 음성 안내
-        </label>
-        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); cursor:pointer;">
-          <input type="checkbox" id="vibrateToggle" checked> 진동
-        </label>
-      </div>
-      <p class="hint" style="margin-top:6px;">레이스 중 구간이 바뀔 때마다 "OOkm 통과, 목표보다 X분 지연/여유"를 자동으로 읽어주고 진동으로도 알려줍니다.</p>
-      <button class="action" id="testAnnounceBtn" style="margin-top:8px; background:var(--ink-soft);">안내 테스트</button>
-
-      <div style="margin-top:10px;">
-        <button class="action" id="glanceModeBtn" style="background:var(--sky);">글랜스 모드 (달리면서 보기)</button>
-      </div>
+      <div class="status-line" id="gpsStatus" style="margin-top:10px;"></div>
 
       <details style="margin-top:14px;">
         <summary style="font-size:12px; color:var(--ink-soft); cursor:pointer;">GPS가 안 잡힐 때 — 고도로 위치 찾기</summary>
@@ -1004,26 +998,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
 
     <div class="panel">
-      <h2>3. 레이스 페이스 계획</h2>
-      <div class="mode-toggle">
-        <button id="sourceApiBtn" class="active">실시간 API</button>
-        <button id="sourceFileBtn">사내망 파일</button>
-      </div>
-
-      <div id="sourceApiControls">
-        <p class="hint">Cloudflare Workers AI 무료 티어를 사용합니다 (카드 등록 불필요, 하루 10,000 뉴런 무료). Worker를 배포하고 그 주소를 아래에 붙여넣으세요.</p>
-        <div class="field">
-          <label for="workerUrlInput">Worker 주소 (한 번만 입력하면 저장됨)</label>
-          <input type="text" id="workerUrlInput" placeholder="https://gpx-pace-planner.xxx.workers.dev">
-        </div>
-      </div>
-
-      <div id="sourceFileControls" style="display:none;">
-        <p class="hint">사내망 Ollama를 GitHub Actions로 호출하는 방식입니다. ① 아래에서 입력 파일을 내보내 저장소에 커밋 → ② Actions 탭에서 워크플로우 수동 실행 → ③ 완료 후 여기서 결과를 불러오세요.</p>
-        <div class="field">
-          <label for="planFilePathInput">결과 파일 경로 (사이트 루트 기준)</label>
-          <input type="text" id="planFilePathInput" value="../../race-plan.json">
-        </div>
+      <h2>2. 레이스 페이스 계획</h2>
+      <p class="hint">Cloudflare Workers AI 무료 티어를 사용합니다 (카드 등록 불필요, 하루 10,000 뉴런 무료). Worker를 배포하고 그 주소를 아래에 붙여넣으세요.</p>
+      <div class="field">
+        <label for="workerUrlInput">Worker 주소 (한 번만 입력하면 저장됨)</label>
+        <input type="text" id="workerUrlInput" placeholder="https://gpx-pace-planner.xxx.workers.dev">
       </div>
 
       <div class="field">
@@ -1053,8 +1032,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
 
       <button class="action" id="getPlanBtn">페이스 계획 받기</button>
-      <button class="action" id="exportInputBtn" style="display:none;">① 입력 파일 내보내기</button>
-      <button class="action" id="loadPlanFileBtn" style="display:none; margin-top:8px;">③ 저장된 계획 불러오기</button>
       <div class="status-line" id="planStatus"></div>
     </div>
   </div>
@@ -1107,7 +1084,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <h2>레이스 페이스 계획 결과</h2>
       <div class="hint" id="planOverallNote" style="margin-bottom:10px;"></div>
       <div id="planTable"></div>
-      <button class="action" id="startRaceBtn" style="margin-top:12px; background:var(--marker);">레이스 시작</button>
+      <button class="action" id="glanceModeBtn" style="margin-top:10px; background:var(--sky);">글랜스 모드 미리보기</button>
+      <button class="action" id="startRaceBtn" style="margin-top:10px; background:var(--marker);">레이스 시작</button>
       <p class="hint" style="margin-top:6px;">누르면 GPS 추적 + 글랜스 모드가 한 번에 시작됩니다. 진행 중에 다시 누르면 글랜스 모드만 다시 열립니다 (레이스는 끝나지 않음).</p>
       <a href="#" id="endRaceBtn" style="display:none; font-size:12px; color:var(--ink-soft); margin-top:6px;">레이스 종료</a>
     </div>
@@ -1917,13 +1895,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   });
 
   // ---------- Race pace planning ----------
-  const sourceApiBtn = document.getElementById('sourceApiBtn');
-  const sourceFileBtn = document.getElementById('sourceFileBtn');
-  const sourceApiControls = document.getElementById('sourceApiControls');
-  const sourceFileControls = document.getElementById('sourceFileControls');
-  const planFilePathInput = document.getElementById('planFilePathInput');
-  const exportInputBtn = document.getElementById('exportInputBtn');
-  const loadPlanFileBtn = document.getElementById('loadPlanFileBtn');
   const workerUrlInput = document.getElementById('workerUrlInput');
   const segIntervalSelect = document.getElementById('segIntervalSelect');
   const goalTimeBtn = document.getElementById('goalTimeBtn');
@@ -1940,32 +1911,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   const planTable = document.getElementById('planTable');
   const startRaceBtn = document.getElementById('startRaceBtn');
 
-  let planSourceMode = 'api'; // 'api' | 'file'
-  sourceApiBtn.addEventListener('click', () => {
-    planSourceMode = 'api';
-    sourceApiBtn.classList.add('active'); sourceFileBtn.classList.remove('active');
-    sourceApiControls.style.display = ''; sourceFileControls.style.display = 'none';
-    getPlanBtn.style.display = ''; exportInputBtn.style.display = 'none'; loadPlanFileBtn.style.display = 'none';
-  });
-  sourceFileBtn.addEventListener('click', () => {
-    planSourceMode = 'file';
-    sourceFileBtn.classList.add('active'); sourceApiBtn.classList.remove('active');
-    sourceFileControls.style.display = ''; sourceApiControls.style.display = 'none';
-    getPlanBtn.style.display = 'none'; exportInputBtn.style.display = ''; loadPlanFileBtn.style.display = '';
-  });
-
-  // Persist worker URL / file path across sessions (endpoint addresses, not secrets).
+  // Persist worker URL across sessions (endpoint address, not a secret).
   try {
     const savedUrl = localStorage.getItem('gpxPacePlannerWorkerUrl');
     if (savedUrl) workerUrlInput.value = savedUrl;
-    const savedPath = localStorage.getItem('gpxPacePlannerFilePath');
-    if (savedPath) planFilePathInput.value = savedPath;
   } catch (e) { /* localStorage unavailable */ }
   workerUrlInput.addEventListener('change', () => {
     try { localStorage.setItem('gpxPacePlannerWorkerUrl', workerUrlInput.value.trim()); } catch (e) {}
-  });
-  planFilePathInput.addEventListener('change', () => {
-    try { localStorage.setItem('gpxPacePlannerFilePath', planFilePathInput.value.trim()); } catch (e) {}
   });
 
   goalTimeBtn.addEventListener('click', () => {
@@ -2175,52 +2127,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return { segments, goal };
   }
 
-  // ----- Mode: 사내망 파일 (export race-input.json / import race-plan.json) -----
-  exportInputBtn.addEventListener('click', () => {
-    const built = buildGoalAndSegments();
-    if (!built) return;
-    const blob = new Blob([JSON.stringify(built, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'race-input.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    planStatus.textContent = 'race-input.json을 내보냈습니다. 저장소에 커밋한 뒤 Actions에서 워크플로우를 실행하세요.';
-  });
-
-  loadPlanFileBtn.addEventListener('click', async () => {
-    const path = planFilePathInput.value.trim();
-    if (!path){
-      planStatus.textContent = '결과 파일 경로를 입력하세요.';
-      planStatus.classList.add('warn');
-      return;
-    }
-    try { localStorage.setItem('gpxPacePlannerFilePath', path); } catch (e) {}
-    planStatus.classList.remove('warn');
-    planStatus.textContent = '결과 파일을 불러오는 중…';
-    loadPlanFileBtn.disabled = true;
-    try {
-      // Cache-bust so a freshly-committed file isn't served from a stale cache.
-      const res = await fetch(path + (path.includes('?') ? '&' : '?') + 't=' + Date.now());
-      if (!res.ok) throw new Error(`파일을 찾을 수 없습니다 (${res.status}). 워크플로우가 완료되어 커밋됐는지, 경로가 맞는지 확인하세요.`);
-      const plan = await res.json();
-      if (!plan.segments || !Array.isArray(plan.segments)){
-        throw new Error('파일 형식이 올바르지 않습니다.');
-      }
-      renderPlan(plan);
-      planStatus.textContent = `${plan.segments.length}개 구간 페이스 계획을 불러왔습니다.`;
-    } catch (err){
-      planStatus.classList.add('warn');
-      planStatus.textContent = '불러오기 실패: ' + err.message;
-    } finally {
-      loadPlanFileBtn.disabled = false;
-    }
-  });
-
-  // ----- Mode: 실시간 API (Cloudflare Worker 등) -----
+  // ----- 실시간 API (Cloudflare Worker) -----
   getPlanBtn.addEventListener('click', async () => {
     const workerUrl = workerUrlInput.value.trim();
     if (!workerUrl){
