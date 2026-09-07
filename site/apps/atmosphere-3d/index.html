@@ -566,7 +566,18 @@ function setMode(m){
     else { hideStatus(); clearScene(); $("detailBox").innerHTML = '<div class="dEmpty">위치를 검색하면 자료를 불러옵니다.</div>'; }
   } else {
     if(state.grid.data){ rebuildScene(); updateAllDisplays(); hideStatus(); }
-    else { hideStatus(); clearScene(); $("detailBox").innerHTML = '<div class="dEmpty">중심 위치를 검색하면 격자(3D) 자료를 불러옵니다.<br>범위·간격은 위 옵션에서 먼저 조절할 수 있어요.</div>'; }
+    else {
+      // First time switching to grid mode: auto-load a grid centered on the
+      // current point-mode location instead of leaving the scene empty and
+      // waiting for the user to search again.
+      clearScene();
+      syncGridConfigFromUI();
+      const lat = state.grid.centerLat!=null ? state.grid.centerLat : state.lat;
+      const lon = state.grid.centerLon!=null ? state.grid.centerLon : state.lon;
+      const elevation = state.grid.centerElevation!=null ? state.grid.centerElevation : state.elevation;
+      const name = state.grid.locationName || state.locationName || "서울";
+      fetchGridData(lat, lon, elevation, name);
+    }
   }
 }
 $("modePointBtn").addEventListener("click", ()=>setMode("point"));
