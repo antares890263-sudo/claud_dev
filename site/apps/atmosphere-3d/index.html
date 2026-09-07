@@ -47,7 +47,7 @@
   }
   #locInput:focus{border-color:var(--accent);}
   #suggestList{
-    position:absolute;top:calc(100% + 4px);left:0;right:0;
+    position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:50;
     background:var(--panel);border:1px solid var(--panel-border);border-radius:10px;
     max-height:260px;overflow-y:auto;display:none;backdrop-filter:blur(6px);
     box-shadow:0 8px 24px rgba(0,0,0,0.45);
@@ -70,6 +70,21 @@
   button.btn.small{padding:6px 9px;font-size:12px;}
   button.btn.toggled{background:var(--accent2);border-color:var(--accent2);color:#2a0f04;font-weight:700;}
 
+  select.sel{
+    padding:8px 8px;border-radius:10px;border:1px solid var(--panel-border);
+    background:rgba(10,16,32,0.9);color:var(--text);font-size:12.5px;cursor:pointer;
+  }
+  select.sel:hover{border-color:var(--accent);}
+
+  #gridControls{
+    display:none;align-items:center;gap:6px;flex-wrap:wrap;
+    padding:6px 10px;border-radius:12px;background:rgba(10,16,32,0.65);
+    border:1px solid var(--panel-border);backdrop-filter:blur(6px);
+  }
+  #gridControls label.chk{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-dim);cursor:pointer;}
+  #gridCountLabel{font-size:11px;color:var(--text-dim);white-space:nowrap;}
+  #gridCountLabel.warn{color:var(--accent2);}
+
   /* ---------- side panel ---------- */
   #sidePanel{
     position:absolute;top:64px;right:12px;z-index:10;width:250px;max-width:44vw;
@@ -79,8 +94,9 @@
   }
   #sidePanel h3{margin:0 0 6px;font-size:12px;color:var(--text-dim);font-weight:600;
     text-transform:uppercase;letter-spacing:0.5px;}
-  .surfRow{display:flex;justify-content:space-between;padding:2px 0;color:var(--text);}
-  .surfRow b{color:var(--accent);}
+  .surfRow{display:flex;justify-content:space-between;padding:2px 0;color:var(--text);gap:8px;}
+  .surfRow span:first-child{white-space:nowrap;color:var(--text-dim);}
+  .surfRow b{color:var(--accent);text-align:right;}
   hr.sep{border:none;border-top:1px solid var(--panel-border);margin:10px 0;}
   #detailBox{min-height:118px;}
   #detailBox .dLine{display:flex;justify-content:space-between;padding:2px 0;}
@@ -110,7 +126,7 @@
     background:rgba(5,9,20,0.72);backdrop-filter:blur(2px);
   }
   #statusOverlay.hidden{display:none;}
-  .statusBox{text-align:center;max-width:320px;padding:20px;}
+  .statusBox{text-align:center;max-width:340px;padding:20px;}
   .spinner{width:34px;height:34px;border-radius:50%;border:3px solid #22314f;border-top-color:var(--accent);
     margin:0 auto 14px;animation:spin 0.85s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -121,6 +137,10 @@
     pointer-events:none;white-space:nowrap;}
 
   #sidePanel.collapsed{display:none;}
+  .pointOnly{display:none;}
+  body.mode-point .pointOnly{display:block;}
+  body.mode-point .gridOnly{display:none;}
+  body.mode-grid .gridOnly{display:block;}
 
   @media (max-width: 640px){
     #sidePanel{width:calc(100vw - 24px);max-width:340px;font-size:12px;top:auto;bottom:78px;right:12px;left:12px;max-height:52vh;}
@@ -131,7 +151,7 @@
   }
 </style>
 </head>
-<body>
+<body class="mode-point">
 <div id="app">
   <div id="canvasWrap"></div>
 
@@ -139,20 +159,58 @@
 
   <div id="topbar">
     <div id="title">🌐 3D 대기<span>연직구조</span> 뷰어</div>
+    <button class="btn toggled" id="modePointBtn" title="한 지점의 연직 프로파일">📍 단일지점</button>
+    <button class="btn" id="modeGridBtn" title="여러 지점의 3D 격자 구조">▦ 격자(3D)</button>
     <div class="searchBox">
-      <input id="locInput" type="text" placeholder="지역명 입력 (예: 서울, Tokyo, Seattle) 또는 위도,경도" autocomplete="off">
+      <input id="locInput" type="text" placeholder="지역명 입력 (예: 서울, Tokyo) 또는 위도,경도" autocomplete="off">
       <div id="suggestList"></div>
     </div>
     <button class="btn primary" id="searchBtn">검색</button>
     <button class="btn" id="geoBtn" title="현재 위치 사용">📍 내 위치</button>
     <button class="btn" id="refreshBtn" title="데이터 새로고침">↻</button>
+
+    <div id="gridControls">
+      <span style="font-size:11.5px;color:var(--text-dim);">범위</span>
+      <select class="sel" id="extentSel">
+        <option value="50">50km</option>
+        <option value="100" selected>100km</option>
+        <option value="150">150km</option>
+        <option value="200">200km</option>
+      </select>
+      <span style="font-size:11.5px;color:var(--text-dim);">간격</span>
+      <select class="sel" id="spacingSel">
+        <option value="10">10km</option>
+        <option value="20" selected>20km</option>
+        <option value="25">25km</option>
+        <option value="50">50km</option>
+      </select>
+      <span style="font-size:11.5px;color:var(--text-dim);">기간</span>
+      <select class="sel" id="daysSel">
+        <option value="1" selected>1일</option>
+        <option value="2">2일</option>
+        <option value="3">3일</option>
+      </select>
+      <span id="gridCountLabel">6×6 = 36지점</span>
+      <button class="btn small" id="loadGridBtn">격자 (재)불러오기</button>
+      <label class="chk"><input type="checkbox" id="windToggle"> 바람장</label>
+      <select class="sel" id="windLevelSel">
+        <option value="1000">1000hPa</option>
+        <option value="925">925hPa</option>
+        <option value="850">850hPa</option>
+        <option value="700" selected>700hPa</option>
+        <option value="500">500hPa</option>
+        <option value="300">300hPa</option>
+        <option value="200">200hPa</option>
+      </select>
+    </div>
+
     <button class="btn" id="autoRotateBtn" title="자동 회전">🔄 자동회전</button>
     <button class="btn" id="resetViewBtn" title="시점 초기화">시점 초기화</button>
     <button class="btn" id="infoToggleBtn" title="정보 패널 표시/숨김">ℹ️ 정보</button>
   </div>
 
   <div id="sidePanel">
-    <h3>현재 지표 상태</h3>
+    <h3>현재 상태</h3>
     <div id="surfaceBox">
       <div class="surfRow"><span>위치</span><b id="sLoc">-</b></div>
       <div class="surfRow"><span>기온</span><b id="sTemp">-</b></div>
@@ -164,8 +222,9 @@
       <div class="surfRow"><span>강수</span><b id="sPrecip">-</b></div>
     </div>
     <hr class="sep">
-    <h3>선택 고도층 정보</h3>
-    <div id="detailBox"><div class="dEmpty">구조물 위의 층(원반)을 클릭하거나<br>마우스를 올리면 상세 정보가 표시됩니다.</div></div>
+    <h3 class="pointOnly">선택 고도층 정보</h3>
+    <h3 class="gridOnly">선택 격자·고도층 정보</h3>
+    <div id="detailBox"><div class="dEmpty">구조물의 점(또는 원반)을 클릭하거나<br>마우스를 올리면 상세 정보가 표시됩니다.</div></div>
     <hr class="sep">
     <h3>기온 색상 범례 (°C)</h3>
     <div class="legendRow">
@@ -177,10 +236,11 @@
       <div class="legendBar" style="background:linear-gradient(to right,#4fd1c5,#f2e05a,#ef7f2e,#e0392f);"></div>
     </div>
     <div class="legendLabels"><span>0</span><span>~40</span><span>~80</span><span>km/h+</span></div>
-    <div style="margin-top:8px;"><span class="badge inv">주황 띠 = 기온역전층</span></div>
+    <div class="pointOnly" style="margin-top:8px;"><span class="badge inv">주황 띠 = 기온역전층</span></div>
+    <div class="gridOnly" style="margin-top:8px;font-size:11px;color:var(--text-dim);line-height:1.5;">바닥의 굴곡면은 각 지점의 실제 지형 고도예요 (높낮이 차이가 잘 보이도록 수직 과장 적용, 색은 참고용). 지형이 높은 곳은 낮은 기압면(예: 1000hPa)이 그 지점에서 아예 표시되지 않아요 — 그 고도의 공기가 지면 아래라 존재하지 않기 때문. 점을 클릭하면 해당 격자·고도의 기온역전 여부도 표시돼요. 격자 모드는 UTC 시간 기준이며 수평·수직축 모두 과장되어 표시됩니다.</div>
   </div>
 
-  <div id="hint">드래그: 회전 · 휠/핀치: 확대·축소 · 원반 클릭: 상세정보</div>
+  <div id="hint">드래그: 회전 · 휠/핀치: 확대·축소 · 클릭: 상세정보</div>
 
   <div id="bottombar">
     <div id="timeRow">
@@ -209,18 +269,29 @@
 
 /* ======================= CONFIG ======================= */
 const LEVELS = [1000,975,950,925,900,850,800,700,600,500,400,300,250,200,150,100,70,50,30];
-const UNIT_PER_KM = 0.62;      // 3D scene units per km of altitude
+const UNIT_PER_KM = 0.62;        // 3D scene units per km of altitude
+const HORIZ_UNIT_PER_KM = 0.16;  // 3D scene units per km of horizontal distance (grid mode)
 const MAX_SLIDER_HOURS = 72;
+const CHUNK_SIZE = 20;           // locations per batched API request
+const CONCURRENCY = 4;           // parallel chunk requests
 
 /* ======================= STATE ======================= */
 let state = {
+  mode: "point",       // "point" | "grid"
   lat: 37.5665, lon: 126.9780, elevation: 40, locationName: "서울",
-  data: null,          // raw open-meteo response
+  data: null,           // raw open-meteo response (point mode)
   hourIndex: 0,
   autoRotate: false,
   playing: false,
   playTimer: null,
   lastFetch: null,
+  grid: {
+    extentKm: 100, spacingKm: 20, days: 1, nSide: 6,
+    meta: null, data: null,
+    centerLat: null, centerLon: null, centerElevation: null, locationName: null,
+    showWind: false, windLevel: 700,
+    lastFetch: null,
+  }
 };
 
 /* ======================= DOM ======================= */
@@ -228,6 +299,7 @@ const $ = (id)=>document.getElementById(id);
 const locInput = $("locInput"), suggestList = $("suggestList");
 const statusOverlay = $("statusOverlay"), statusMsg = $("statusMsg");
 const timeSlider = $("timeSlider"), timeValue = $("timeValue");
+const surfaceBoxDefaultHTML = $("surfaceBox").innerHTML;
 
 /* ======================= UTIL ======================= */
 function cToColor(t){
@@ -274,6 +346,29 @@ function windToColor(speedKmh){
   }
   return 0xffffff;
 }
+function terrainColor(t){
+  // low (green) -> mid (brown) -> high (off-white), t in [0,1]
+  const stops = [
+    {t:0,    c:[43,74,49]},
+    {t:0.45, c:[95,84,45]},
+    {t:0.75, c:[143,112,72]},
+    {t:1,    c:[214,209,199]},
+  ];
+  if(t<=0) return stops[0].c;
+  if(t>=1) return stops[stops.length-1].c;
+  for(let i=0;i<stops.length-1;i++){
+    const a=stops[i], b=stops[i+1];
+    if(t>=a.t && t<=b.t){
+      const f=(t-a.t)/(b.t-a.t);
+      return [
+        Math.round(a.c[0]+(b.c[0]-a.c[0])*f),
+        Math.round(a.c[1]+(b.c[1]-a.c[1])*f),
+        Math.round(a.c[2]+(b.c[2]-a.c[2])*f),
+      ];
+    }
+  }
+  return [150,150,150];
+}
 function isaHeightM(hpa){
   // International Standard Atmosphere approximation (fallback when geopotential height missing)
   return 44330 * (1 - Math.pow(hpa/1013.25, 1/5.255));
@@ -284,10 +379,9 @@ function degToCompass(deg){
   return dirs[Math.round(deg/22.5)%16];
 }
 
-/* ======================= FETCH ======================= */
+/* ======================= FETCH: GEOCODING ======================= */
 async function geocode(query){
   const trimmed = query.trim();
-  // "lat,lon" direct input
   const coordMatch = trimmed.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/);
   if(coordMatch){
     return [{name:`${coordMatch[1]}, ${coordMatch[3]}`, latitude:parseFloat(coordMatch[1]), longitude:parseFloat(coordMatch[3]), elevation:0, country:"", admin1:""}];
@@ -299,6 +393,7 @@ async function geocode(query){
   return json.results || [];
 }
 
+/* ======================= FETCH: SINGLE POINT ======================= */
 function buildForecastUrl(lat, lon){
   const surfaceVars = ["temperature_2m","relative_humidity_2m","dew_point_2m","apparent_temperature",
     "precipitation","weather_code","cloud_cover","pressure_msl","surface_pressure",
@@ -309,14 +404,12 @@ function buildForecastUrl(lat, lon){
   const hourly = surfaceVars.concat(levelParams).join(",");
   return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=${encodeURIComponent(hourly)}&forecast_days=3&timezone=auto&wind_speed_unit=kmh`;
 }
-
 async function fetchForecast(lat, lon){
   const url = buildForecastUrl(lat, lon);
   const res = await fetch(url);
   if(!res.ok) throw new Error("forecast fetch failed: "+res.status);
   return res.json();
 }
-
 async function loadLocation(lat, lon, elevation, name){
   showStatus(`"${name}" 지역의 대기 자료를 불러오는 중...`);
   try{
@@ -340,6 +433,95 @@ async function loadLocation(lat, lon, elevation, name){
   }
 }
 
+/* ======================= FETCH: GRID (multi-point) ======================= */
+function buildGridMeta(centerLat, centerLon, extentKm, spacingKm){
+  const nSide = Math.max(2, Math.round(extentKm/spacingKm)+1);
+  const half = (nSide-1)/2;
+  const pts = [];
+  let idx=0;
+  for(let iy=0; iy<nSide; iy++){
+    for(let ix=0; ix<nSide; ix++){
+      const xKm = (ix-half)*spacingKm;
+      const yKm = (iy-half)*spacingKm;
+      const dLat = yKm/111.32;
+      const dLon = xKm/(111.32*Math.cos(centerLat*Math.PI/180));
+      pts.push({idx:idx++, ix, iy, xKm, yKm, lat:centerLat+dLat, lon:centerLon+dLon});
+    }
+  }
+  state.grid.nSide = nSide;
+  return pts;
+}
+function buildGridForecastUrl(latsCsv, lonsCsv, days){
+  const surfaceVars = ["temperature_2m","cloud_cover"];
+  const levelVars = ["temperature","relative_humidity","cloud_cover","wind_speed","wind_direction","geopotential_height"];
+  const levelParams = [];
+  LEVELS.forEach(p=>levelVars.forEach(v=>levelParams.push(`${v}_${p}hPa`)));
+  const hourly = surfaceVars.concat(levelParams).join(",");
+  return `https://api.open-meteo.com/v1/forecast?latitude=${latsCsv}&longitude=${lonsCsv}&hourly=${encodeURIComponent(hourly)}&forecast_days=${days}&timezone=UTC&wind_speed_unit=kmh`;
+}
+function chunkArray(arr, size){
+  const out=[];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+async function runWithConcurrency(items, limit, worker){
+  let i=0;
+  async function next(){
+    if(i>=items.length) return;
+    const idx=i++;
+    await worker(items[idx], idx);
+    return next();
+  }
+  const runners = Array.from({length:Math.min(limit, items.length)}, next);
+  await Promise.all(runners);
+}
+async function fetchGridData(centerLat, centerLon, elevationHint, name){
+  const cfg = state.grid;
+  showStatus(`"${name}" 중심 ${cfg.extentKm}km × ${cfg.extentKm}km 격자 자료를 준비하는 중...`);
+  try{
+    const points = buildGridMeta(centerLat, centerLon, cfg.extentKm, cfg.spacingKm);
+    const chunks = chunkArray(points, CHUNK_SIZE);
+    const results = new Array(points.length).fill(null);
+    let done = 0;
+    const total = chunks.length;
+    await runWithConcurrency(chunks, CONCURRENCY, async (chunk)=>{
+      const lats = chunk.map(p=>p.lat.toFixed(4)).join(",");
+      const lons = chunk.map(p=>p.lon.toFixed(4)).join(",");
+      const url = buildGridForecastUrl(lats, lons, cfg.days);
+      const res = await fetch(url);
+      if(!res.ok) throw new Error("격자 자료 요청 실패: "+res.status);
+      const json = await res.json();
+      const arr = Array.isArray(json) ? json : [json];
+      chunk.forEach((p,k)=>{ results[p.idx] = arr[k] || null; });
+      done++;
+      showStatus(`"${name}" 격자 자료 불러오는 중...<br><span style="color:#8fa0bd;font-size:11.5px;">${done}/${total} 배치 완료 (${points.length}지점)</span>`);
+    });
+
+    state.grid.meta = points;
+    state.grid.data = results;
+    state.grid.centerLat = centerLat; state.grid.centerLon = centerLon;
+    state.grid.centerElevation = elevationHint;
+    state.grid.locationName = name;
+    state.grid.lastFetch = new Date();
+
+    const sample = results.find(r=>r && r.hourly && r.hourly.time);
+    const n = sample ? sample.hourly.time.length : 24;
+    timeSlider.max = Math.max(0, n-1);
+    state.hourIndex = Math.min(state.hourIndex, n-1) || 0;
+    timeSlider.value = state.hourIndex;
+
+    const failCount = results.filter(r=>!r).length;
+    $("coordInfo").textContent = `중심좌표: ${centerLat.toFixed(3)}, ${centerLon.toFixed(3)} · 격자 ${cfg.nSide}×${cfg.nSide} (${points.length}지점${failCount?`, 실패 ${failCount}`:''}) · UTC 기준`;
+    $("updatedInfo").textContent = `마지막 업데이트: ${state.grid.lastFetch.toLocaleTimeString('ko-KR')}`;
+    hideStatus();
+    rebuildScene();
+    updateAllDisplays();
+  }catch(err){
+    console.error(err);
+    showStatus(`격자 데이터를 불러오지 못했습니다.<br><span style="color:#8fa0bd;font-size:11.5px;">${err.message||err}</span><br><br>지점 수(범위/간격)를 줄이거나 다시 시도해보세요.`, true);
+  }
+}
+
 function showStatus(html, isErr){
   statusOverlay.classList.remove("hidden");
   statusMsg.innerHTML = html;
@@ -347,6 +529,66 @@ function showStatus(html, isErr){
   statusOverlay.querySelector(".spinner").style.display = isErr ? "none" : "block";
 }
 function hideStatus(){ statusOverlay.classList.add("hidden"); }
+
+/* ======================= MODE / LOCATION DISPATCH ======================= */
+function syncGridConfigFromUI(){
+  state.grid.extentKm = parseInt($("extentSel").value,10);
+  state.grid.spacingKm = parseInt($("spacingSel").value,10);
+  state.grid.days = parseInt($("daysSel").value,10);
+}
+function selectLocation(lat, lon, elevation, name){
+  if(state.mode==="point"){
+    loadLocation(lat, lon, elevation, name);
+  } else {
+    syncGridConfigFromUI();
+    fetchGridData(lat, lon, elevation, name);
+  }
+}
+function updateGridCountLabel(){
+  const extent = parseInt($("extentSel").value,10), spacing = parseInt($("spacingSel").value,10);
+  const nSide = Math.max(2, Math.round(extent/spacing)+1);
+  const total = nSide*nSide;
+  const label = $("gridCountLabel");
+  label.textContent = `${nSide}×${nSide} = ${total}지점`;
+  label.classList.toggle("warn", total>200);
+}
+function setMode(m){
+  if(state.mode===m) return;
+  state.mode = m;
+  document.body.classList.toggle("mode-point", m==="point");
+  document.body.classList.toggle("mode-grid", m==="grid");
+  $("modePointBtn").classList.toggle("toggled", m==="point");
+  $("modeGridBtn").classList.toggle("toggled", m==="grid");
+  $("gridControls").style.display = m==="grid" ? "flex" : "none";
+  updateGridCountLabel();
+  if(m==="point"){
+    if(state.data){ rebuildScene(); updateAllDisplays(); hideStatus(); }
+    else { hideStatus(); clearScene(); $("detailBox").innerHTML = '<div class="dEmpty">위치를 검색하면 자료를 불러옵니다.</div>'; }
+  } else {
+    if(state.grid.data){ rebuildScene(); updateAllDisplays(); hideStatus(); }
+    else { hideStatus(); clearScene(); $("detailBox").innerHTML = '<div class="dEmpty">중심 위치를 검색하면 격자(3D) 자료를 불러옵니다.<br>범위·간격은 위 옵션에서 먼저 조절할 수 있어요.</div>'; }
+  }
+}
+$("modePointBtn").addEventListener("click", ()=>setMode("point"));
+$("modeGridBtn").addEventListener("click", ()=>setMode("grid"));
+$("extentSel").addEventListener("change", updateGridCountLabel);
+$("spacingSel").addEventListener("change", updateGridCountLabel);
+$("loadGridBtn").addEventListener("click", ()=>{
+  syncGridConfigFromUI();
+  const c = state.grid.centerLat!=null
+    ? {lat:state.grid.centerLat, lon:state.grid.centerLon, elevation:state.grid.centerElevation, name:state.grid.locationName}
+    : {lat:state.lat, lon:state.lon, elevation:state.elevation, name:state.locationName};
+  fetchGridData(c.lat, c.lon, c.elevation, c.name);
+});
+$("windToggle").addEventListener("change", (e)=>{
+  state.grid.showWind = e.target.checked;
+  if(state.mode==="grid" && state.grid.data) rebuildScene({keepCamera:true});
+});
+$("windLevelSel").addEventListener("change", (e)=>{
+  state.grid.windLevel = parseInt(e.target.value,10);
+  if(state.mode==="grid" && state.grid.showWind && state.grid.data) rebuildScene({keepCamera:true});
+});
+updateGridCountLabel();
 
 /* ======================= SEARCH UI ======================= */
 let suggestTimer=null;
@@ -376,7 +618,7 @@ function renderSuggestions(results){
       const r = results[i];
       locInput.value = r.name;
       suggestList.style.display="none";
-      loadLocation(r.latitude, r.longitude, r.elevation, r.name);
+      selectLocation(r.latitude, r.longitude, r.elevation, r.name);
     });
   });
 }
@@ -388,7 +630,7 @@ async function doSearch(){
     const results = await geocode(q);
     if(!results.length){ showStatus("검색 결과가 없습니다. 다른 지역명을 입력해보세요.", true); setTimeout(hideStatus, 1800); return; }
     const r = results[0];
-    loadLocation(r.latitude, r.longitude, r.elevation, r.name);
+    selectLocation(r.latitude, r.longitude, r.elevation, r.name);
   }catch(e){
     showStatus("검색 중 오류가 발생했습니다.", true); setTimeout(hideStatus, 1800);
   }
@@ -402,7 +644,7 @@ $("geoBtn").addEventListener("click", ()=>{
   showStatus("현재 위치를 확인하는 중...");
   navigator.geolocation.getCurrentPosition((pos)=>{
     const {latitude, longitude} = pos.coords;
-    loadLocation(latitude, longitude, undefined, "내 위치");
+    selectLocation(latitude, longitude, undefined, "내 위치");
     locInput.value = "내 위치";
   }, (err)=>{
     hideStatus();
@@ -410,7 +652,14 @@ $("geoBtn").addEventListener("click", ()=>{
   }, {timeout:8000});
 });
 $("refreshBtn").addEventListener("click", ()=>{
-  loadLocation(state.lat, state.lon, state.elevation, state.locationName);
+  if(state.mode==="point"){
+    loadLocation(state.lat, state.lon, state.elevation, state.locationName);
+  } else if(state.grid.centerLat!=null){
+    syncGridConfigFromUI();
+    fetchGridData(state.grid.centerLat, state.grid.centerLon, state.grid.centerElevation, state.grid.locationName);
+  } else {
+    showStatus("먼저 위치를 검색해주세요.", true); setTimeout(hideStatus,1500);
+  }
 });
 $("infoToggleBtn").addEventListener("click", ()=>{
   $("sidePanel").classList.toggle("collapsed");
@@ -421,12 +670,17 @@ if(window.matchMedia("(max-width: 640px)").matches){
 
 /* ======================= THREE.JS SCENE ======================= */
 let renderer, scene, camera;
-let sceneGroup;             // holds all data-derived objects (rebuilt per location)
+let sceneGroup;
 let camState = {radius:20, theta:0.75, phi:0.92, target:new THREE.Vector3(0,6,0)};
-let pickables = [];         // {mesh, levelIndex}
-let hoveredIndex = null, selectedIndex = null;
 const raycaster = new THREE.Raycaster();
 const mouseNDC = new THREE.Vector2();
+
+// point mode picking
+let pickables = [];
+let hoveredIndex = null, selectedIndex = null;
+// grid mode picking
+let gridPointsObject = null, gridVertexMeta = [], gridSelMarker = null, gridTopHeightUnits = 12;
+let hoveredGridIdx = null, selectedGridIdx = null;
 
 function initThree(){
   const wrap = $("canvasWrap");
@@ -437,9 +691,9 @@ function initThree(){
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x050914);
-  scene.fog = new THREE.FogExp2(0x050914, 0.014);
+  scene.fog = new THREE.FogExp2(0x050914, 0.011);
 
-  camera = new THREE.PerspectiveCamera(52, window.innerWidth/window.innerHeight, 0.1, 500);
+  camera = new THREE.PerspectiveCamera(52, window.innerWidth/window.innerHeight, 0.1, 800);
   updateCameraFromState();
 
   // starfield
@@ -447,7 +701,7 @@ function initThree(){
   const starCount = 600;
   const pos = new Float32Array(starCount*3);
   for(let i=0;i<starCount;i++){
-    const r = 80+Math.random()*160;
+    const r = 80+Math.random()*220;
     const th = Math.random()*Math.PI*2, ph = Math.random()*Math.PI*0.5;
     pos[i*3] = r*Math.cos(th)*Math.cos(ph);
     pos[i*3+1] = Math.abs(r*Math.sin(ph))+5;
@@ -465,13 +719,11 @@ function initThree(){
 
   animate();
 }
-
 function onResize(){
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
-
 function updateCameraFromState(){
   const {radius, theta, phi, target} = camState;
   const x = target.x + radius*Math.sin(phi)*Math.sin(theta);
@@ -480,7 +732,6 @@ function updateCameraFromState(){
   camera.position.set(x,y,z);
   camera.lookAt(target);
 }
-
 function setupPointerControls(dom){
   const pointers = new Map();
   let lastPinchDist = null;
@@ -500,7 +751,6 @@ function setupPointerControls(dom){
   });
   dom.addEventListener("pointermove", (e)=>{
     if(!pointers.has(e.pointerId)){
-      // hover raycast (desktop, no button pressed)
       handleHover(e);
       return;
     }
@@ -516,7 +766,7 @@ function setupPointerControls(dom){
       const dist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
       if(lastPinchDist!=null){
         const delta = dist - lastPinchDist;
-        camState.radius = Math.min(Math.max(camState.radius - delta*0.05, 6), 55);
+        camState.radius = Math.min(Math.max(camState.radius - delta*0.08, 4), 140);
         updateCameraFromState();
       }
       lastPinchDist = dist;
@@ -524,38 +774,67 @@ function setupPointerControls(dom){
   });
   dom.addEventListener("wheel", (e)=>{
     e.preventDefault();
-    camState.radius = Math.min(Math.max(camState.radius + e.deltaY*0.02, 6), 55);
+    camState.radius = Math.min(Math.max(camState.radius + e.deltaY*0.03, 4), 140);
     updateCameraFromState();
   }, {passive:false});
   dom.addEventListener("dblclick", ()=>{ resetView(); });
   dom.addEventListener("click", (e)=>{ handleClick(e); });
 }
-
 function resetView(){
-  camState.radius=20; camState.theta=0.75; camState.phi=0.92;
-  updateCameraFromState();
+  frameScene();
 }
 $("resetViewBtn").addEventListener("click", resetView);
 $("autoRotateBtn").addEventListener("click", (e)=>{
   state.autoRotate = !state.autoRotate;
   e.currentTarget.classList.toggle("toggled", state.autoRotate);
 });
+function frameScene(){
+  let halfWidth, topY;
+  if(state.mode==="point"){
+    halfWidth = 4.2;
+    topY = levelsCache.length ? levelsCache[levelsCache.length-1].y : 12;
+  } else {
+    halfWidth = (state.grid.extentKm/2)*HORIZ_UNIT_PER_KM;
+    topY = gridTopHeightUnits || 12;
+  }
+  camState.target.set(0, topY*0.42, 0);
+  camState.radius = Math.max(halfWidth*2.4, topY*1.7, 10);
+  camState.theta = 0.75; camState.phi = 0.9;
+  updateCameraFromState();
+}
 
 function handleHover(e){
   updateMouseNDC(e);
-  const hit = pickLevel();
-  if(hit!==hoveredIndex){
-    hoveredIndex = hit;
-    if(selectedIndex===null) renderDetail(hoveredIndex);
+  if(state.mode==="point"){
+    const hit = pickLevel();
+    if(hit!==hoveredIndex){
+      hoveredIndex = hit;
+      if(selectedIndex===null) renderDetail(hoveredIndex);
+    }
+  } else {
+    const hit = pickGridVertex();
+    if(hit!==hoveredGridIdx){
+      hoveredGridIdx = hit;
+      if(selectedGridIdx===null) renderGridDetail(hoveredGridIdx);
+    }
   }
 }
 function handleClick(e){
   updateMouseNDC(e);
-  const hit = pickLevel();
-  if(hit!==null){
-    selectedIndex = (selectedIndex===hit) ? null : hit;
-    renderDetail(selectedIndex!==null ? selectedIndex : hoveredIndex);
-    highlightSelection();
+  if(state.mode==="point"){
+    const hit = pickLevel();
+    if(hit!==null){
+      selectedIndex = (selectedIndex===hit) ? null : hit;
+      renderDetail(selectedIndex!==null ? selectedIndex : hoveredIndex);
+      highlightSelection();
+    }
+  } else {
+    const hit = pickGridVertex();
+    if(hit!==null){
+      selectedGridIdx = (selectedGridIdx===hit) ? null : hit;
+      renderGridDetail(selectedGridIdx!==null ? selectedGridIdx : hoveredGridIdx);
+      highlightGridSelection();
+    }
   }
 }
 function updateMouseNDC(e){
@@ -580,6 +859,26 @@ function highlightSelection(){
     const isSel = p.levelIndex===selectedIndex;
     p.mesh.material.opacity = isSel ? Math.min(p.baseOpacity+0.35,0.95) : p.baseOpacity;
   });
+}
+function pickGridVertex(){
+  if(!gridPointsObject) return null;
+  raycaster.params.Points = raycaster.params.Points || {};
+  raycaster.params.Points.threshold = 0.3;
+  raycaster.setFromCamera(mouseNDC, camera);
+  const hits = raycaster.intersectObject(gridPointsObject, false);
+  if(hits.length && hits[0].index!==undefined) return hits[0].index;
+  return null;
+}
+function highlightGridSelection(){
+  if(gridSelMarker){ sceneGroup.remove(gridSelMarker); disposeObject(gridSelMarker); gridSelMarker=null; }
+  if(selectedGridIdx===null || !gridVertexMeta[selectedGridIdx]) return;
+  const m = gridVertexMeta[selectedGridIdx];
+  gridSelMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22,12,12),
+    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.9})
+  );
+  gridSelMarker.position.set(m.xKm*HORIZ_UNIT_PER_KM, m.y, m.yKm*HORIZ_UNIT_PER_KM);
+  sceneGroup.add(gridSelMarker);
 }
 
 function animate(){
@@ -628,21 +927,28 @@ function roundRect(ctx,x,y,w,h,r){
   ctx.closePath();
 }
 
-/* ======================= SCENE BUILD FROM DATA ======================= */
-let levelsCache = []; // per-rebuild: [{p, heightKm, y, temp, rh, cloud, windSpeed, windDir, sceneMeshes...}]
-
-function rebuildScene(){
-  // clear old
+/* ======================= SCENE BUILD: shared ======================= */
+function rebuildScene(opts={}){
   while(sceneGroup.children.length){
     const obj = sceneGroup.children.pop();
     disposeObject(obj);
   }
   pickables = [];
   hoveredIndex = null; selectedIndex = null;
+  gridPointsObject = null; gridSelMarker = null;
+  hoveredGridIdx = null; selectedGridIdx = null;
 
-  buildGround();
-  buildLevels();
-  buildSpine();
+  if(state.mode==="point"){
+    buildGround();
+    buildLevels();
+    buildSpine();
+  } else {
+    buildGridGround();
+    buildGridTerrain();
+    buildGridPointCloud();
+    buildGridWindLayer();
+  }
+  if(!opts.keepCamera) frameScene();
 }
 function disposeObject(obj){
   obj.traverse ? obj.traverse(o=>{
@@ -653,6 +959,18 @@ function disposeObject(obj){
     }
   }) : null;
 }
+function clearScene(){
+  while(sceneGroup.children.length){
+    disposeObject(sceneGroup.children.pop());
+  }
+  pickables = [];
+  hoveredIndex = null; selectedIndex = null;
+  gridPointsObject = null; gridSelMarker = null;
+  hoveredGridIdx = null; selectedGridIdx = null;
+}
+
+/* ======================= SCENE BUILD: point mode ======================= */
+let levelsCache = [];
 
 function buildGround(){
   const groundR = 4.2;
@@ -679,7 +997,6 @@ function buildGround(){
   groundDisk.rotation.x = -Math.PI/2;
   sceneGroup.add(groundDisk);
 }
-
 function buildSpine(){
   if(!levelsCache.length) return;
   const topY = levelsCache[levelsCache.length-1].y;
@@ -690,14 +1007,12 @@ function buildSpine(){
   spine.position.y = topY/2;
   sceneGroup.add(spine);
 }
-
 function getHourlyVal(key, idx){
   const h = state.data.hourly;
   if(!h || !h[key]) return null;
   const v = h[key][idx];
   return (v===null||v===undefined) ? null : v;
 }
-
 function buildLevels(){
   const idx = state.hourIndex;
   levelsCache = [];
@@ -715,7 +1030,7 @@ function buildLevels(){
     const heightKm = heightAglM/1000;
     const y = heightKm * UNIT_PER_KM;
 
-    if(temp===null){ return; } // skip levels the model doesn't provide for this location
+    if(temp===null){ return; }
 
     levelsCache.push({p, heightKm, y, temp, rh, cloud, windSpeed, windDir});
   });
@@ -724,7 +1039,6 @@ function buildLevels(){
     const color = rgbToHex(cToColor(lv.temp));
     const humidityFactor = (lv.rh||0)/100;
 
-    // disk
     const diskGeo = new THREE.CircleGeometry(3.3, 48);
     const baseOpacity = 0.14 + humidityFactor*0.32;
     const diskMat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:baseOpacity, side:THREE.DoubleSide});
@@ -734,7 +1048,6 @@ function buildLevels(){
     sceneGroup.add(disk);
     pickables.push({mesh:disk, levelIndex:i, baseOpacity});
 
-    // tick ring on spine
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.09, 0.014, 8, 24),
       new THREE.MeshBasicMaterial({color:0x9fd6f7})
@@ -743,7 +1056,6 @@ function buildLevels(){
     ring.position.y = lv.y;
     sceneGroup.add(ring);
 
-    // wind arrow
     if(lv.windSpeed!==null && lv.windDir!==null){
       const toDeg = (lv.windDir+180)%360;
       const rad = toDeg*Math.PI/180;
@@ -753,7 +1065,6 @@ function buildLevels(){
       sceneGroup.add(arrow);
     }
 
-    // cloud particles for humid / cloudy layers
     const cloudPct = lv.cloud!==null ? lv.cloud : (lv.rh>85?60:0);
     if(cloudPct>35){
       const n = Math.round(20 + cloudPct*0.5);
@@ -771,7 +1082,6 @@ function buildLevels(){
       sceneGroup.add(new THREE.Points(geo, mat));
     }
 
-    // label sprite
     const label = makeTextSprite(
       [`${lv.p}hPa`, `${lv.heightKm.toFixed(1)}km · ${lv.temp.toFixed(1)}°C`, `습도 ${lv.rh!==null?Math.round(lv.rh):'-'}%  풍속 ${lv.windSpeed!==null?Math.round(lv.windSpeed):'-'}km/h`],
       {scale:0.5}
@@ -779,7 +1089,6 @@ function buildLevels(){
     label.position.set(4.6, lv.y, 0);
     sceneGroup.add(label);
 
-    // inversion band (compare to previous level below)
     if(prevTemp!==null && lv.temp>prevTemp+0.15){
       const h = lv.y-prevY;
       if(h>0.02){
@@ -794,35 +1103,10 @@ function buildLevels(){
     prevTemp = lv.temp; prevY = lv.y;
   });
 }
-
-/* ======================= DISPLAY UPDATE ======================= */
-function updateAllDisplays(){
-  updateSurfaceBox();
-  updateTimeLabel();
-  if(selectedIndex!==null) renderDetail(selectedIndex);
-}
-function updateSurfaceBox(){
-  const idx = state.hourIndex;
-  $("sLoc").textContent = state.locationName;
-  $("sTemp").textContent = fmt(getHourlyVal("temperature_2m", idx))+"°C";
-  $("sFeels").textContent = fmt(getHourlyVal("apparent_temperature", idx))+"°C";
-  $("sHum").textContent = fmt(getHourlyVal("relative_humidity_2m", idx),0)+"%";
-  const ws = getHourlyVal("wind_speed_10m", idx), wd = getHourlyVal("wind_direction_10m", idx);
-  $("sWind").textContent = (ws!==null? fmt(ws,0)+"km/h "+(wd!==null?degToCompass(wd):"") : "-");
-  $("sPres").textContent = fmt(getHourlyVal("surface_pressure", idx),0)+"hPa";
-  $("sCloud").textContent = fmt(getHourlyVal("cloud_cover", idx),0)+"%";
-  $("sPrecip").textContent = fmt(getHourlyVal("precipitation", idx),1)+"mm";
-}
-function updateTimeLabel(){
-  const t = state.data && state.data.hourly ? state.data.hourly.time[state.hourIndex] : null;
-  if(!t){ timeValue.textContent="-"; return; }
-  const d = new Date(t);
-  timeValue.textContent = d.toLocaleString('ko-KR', {month:'numeric', day:'numeric', weekday:'short', hour:'2-digit', minute:'2-digit'});
-}
 function renderDetail(i){
   const box = $("detailBox");
   if(i===null || !levelsCache[i]){
-    box.innerHTML = `<div class="dEmpty">구조물 위의 층(원반)을 클릭하거나<br>마우스를 올리면 상세 정보가 표시됩니다.</div>`;
+    box.innerHTML = `<div class="dEmpty">구조물의 점(또는 원반)을 클릭하거나<br>마우스를 올리면 상세 정보가 표시됩니다.</div>`;
     return;
   }
   const lv = levelsCache[i];
@@ -839,17 +1123,280 @@ function renderDetail(i){
   `;
 }
 
+/* ======================= SCENE BUILD: grid mode ======================= */
+function buildGridGround(){
+  const cfg = state.grid;
+  const halfUnits = (cfg.extentKm/2)*HORIZ_UNIT_PER_KM;
+  const size = halfUnits*2;
+  const divisions = Math.max(1, cfg.nSide-1);
+  const gh = new THREE.GridHelper(size, divisions, 0x1e3a5c, 0x142238);
+  sceneGroup.add(gh);
+
+  const plane = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size),
+    new THREE.MeshBasicMaterial({color:0x0d1830, transparent:true, opacity:0.22, side:THREE.DoubleSide})
+  );
+  plane.rotation.x = -Math.PI/2;
+  sceneGroup.add(plane);
+
+  const centerMark = new THREE.Mesh(
+    new THREE.SphereGeometry(0.14,14,14),
+    new THREE.MeshBasicMaterial({color:0x4fc3f7})
+  );
+  centerMark.position.set(0,0.14,0);
+  sceneGroup.add(centerMark);
+
+  const half = halfUnits+1.3;
+  [["N",0,-half],["E",half,0],["S",0,half],["W",-half,0]].forEach(([label,x,z])=>{
+    const s = makeTextSprite([label,"",""], {scale:0.55, bg:"rgba(8,14,28,0.0)", border:"rgba(0,0,0,0)"});
+    s.position.set(x,0.3,z);
+    sceneGroup.add(s);
+  });
+}
+function buildGridTerrain(){
+  const pts = state.grid.meta, data = state.grid.data;
+  const n = state.grid.nSide;
+  if(!pts || !pts.length || !n || n<2) return;
+
+  const elevs = pts.map((pt,i)=> (data[i] && data[i].elevation!=null) ? data[i].elevation : 0);
+  const minE = Math.min.apply(null, elevs), maxE = Math.max.apply(null, elevs);
+  const elevRangeM = Math.max(maxE-minE, 1);
+  state.grid.minElev = minE; state.grid.maxElev = maxE;
+
+  // Real terrain relief (tens to low-thousands of meters) is tiny next to the
+  // atmosphere column height (up to ~24km), so it would look flat at true scale.
+  // Auto-pick a vertical exaggeration so the relief is always clearly visible
+  // (target ~3 scene units of visible relief), while the atmosphere columns
+  // above each point keep their true-to-scale internal spacing.
+  const DESIRED_RELIEF_UNITS = 3.2;
+  let exaggeration;
+  if(elevRangeM < 20){
+    exaggeration = 3; // near-flat terrain: don't dramatize tiny model noise
+  } else {
+    exaggeration = DESIRED_RELIEF_UNITS / ((elevRangeM/1000)*UNIT_PER_KM);
+    exaggeration = Math.max(3, Math.min(exaggeration, 40));
+  }
+  state.grid.terrainExaggeration = exaggeration;
+
+  const positions = new Float32Array(pts.length*3);
+  const colors = new Float32Array(pts.length*3);
+  pts.forEach((pt,i)=>{
+    const e = elevs[i];
+    positions[i*3]   = pt.xKm*HORIZ_UNIT_PER_KM;
+    positions[i*3+1] = ((e-minE)/1000) * UNIT_PER_KM * exaggeration;
+    positions[i*3+2] = pt.yKm*HORIZ_UNIT_PER_KM;
+    const t = Math.max(0, Math.min(1, (e-minE)/elevRangeM));
+    const c = terrainColor(t);
+    colors[i*3]=c[0]/255; colors[i*3+1]=c[1]/255; colors[i*3+2]=c[2]/255;
+  });
+
+  const indices = [];
+  for(let iy=0; iy<n-1; iy++){
+    for(let ix=0; ix<n-1; ix++){
+      const a = iy*n+ix, b = iy*n+ix+1, c = (iy+1)*n+ix, d = (iy+1)*n+ix+1;
+      indices.push(a,c,b,  b,c,d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions,3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors,3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.DoubleSide, transparent:true, opacity:0.92});
+  const mesh = new THREE.Mesh(geo, mat);
+  sceneGroup.add(mesh);
+
+  const wire = new THREE.LineSegments(
+    new THREE.WireframeGeometry(geo),
+    new THREE.LineBasicMaterial({color:0x0a1220, transparent:true, opacity:0.35})
+  );
+  sceneGroup.add(wire);
+}
+function buildGridPointCloud(){
+  const idx = state.hourIndex;
+  const pts = state.grid.meta || [];
+  const data = state.grid.data || [];
+  const positions=[], colors=[];
+  const meta=[];
+  const haloPositions=[];
+  let maxY = 0;
+
+  const minE = state.grid.minElev || 0;
+  const exaggeration = state.grid.terrainExaggeration || 3;
+
+  for(let pi=0; pi<pts.length; pi++){
+    const d = data[pi];
+    if(!d || !d.hourly) continue;
+    const elevation = d.elevation || 0;
+    const terrainBaseY = ((elevation-minE)/1000) * UNIT_PER_KM * exaggeration;
+    LEVELS.forEach(p=>{
+      const tArr = d.hourly[`temperature_${p}hPa`];
+      const temp = tArr ? tArr[idx] : null;
+      if(temp===null || temp===undefined) return;
+      const gphArr = d.hourly[`geopotential_height_${p}hPa`];
+      let gph = gphArr ? gphArr[idx] : null;
+      if(gph===null || gph===undefined) gph = isaHeightM(p)+elevation;
+      // The API's pressure-level grid is independent of terrain and can carry
+      // extrapolated values below the local ground; explicitly hide any level
+      // whose real altitude sits at or below this point's own terrain.
+      if(gph <= elevation+10) return;
+
+      const rhArr = d.hourly[`relative_humidity_${p}hPa`];
+      const rh = rhArr ? rhArr[idx] : null;
+      const cloudArr = d.hourly[`cloud_cover_${p}hPa`];
+      const cloud = cloudArr ? cloudArr[idx] : null;
+      const wsArr = d.hourly[`wind_speed_${p}hPa`];
+      const windSpeed = wsArr ? wsArr[idx] : null;
+      const wdArr = d.hourly[`wind_direction_${p}hPa`];
+      const windDir = wdArr ? wdArr[idx] : null;
+      const heightKmAgl = (gph-elevation)/1000; // height above local ground (shown in panel)
+
+      const x = pts[pi].xKm*HORIZ_UNIT_PER_KM;
+      const y = terrainBaseY + heightKmAgl*UNIT_PER_KM;
+      const z = pts[pi].yKm*HORIZ_UNIT_PER_KM;
+      if(y>maxY) maxY=y;
+
+      const [r,g,b] = cToColor(temp);
+      positions.push(x,y,z);
+      colors.push(r/255,g/255,b/255);
+      meta.push({pointIdx:pi, p, xKm:pts[pi].xKm, yKm:pts[pi].yKm, lat:pts[pi].lat, lon:pts[pi].lon,
+        heightKm:heightKmAgl, elevation, y, temp, rh, cloud, windSpeed, windDir});
+
+      const cp = cloud!==null ? cloud : (rh>85?60:0);
+      if(cp>55){ haloPositions.push(x,y,z); }
+    });
+  }
+
+  gridVertexMeta = meta;
+  gridTopHeightUnits = maxY || 12;
+
+  if(positions.length){
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors,3));
+    const mat = new THREE.PointsMaterial({size:0.34, vertexColors:true, transparent:true, opacity:0.88, sizeAttenuation:true});
+    gridPointsObject = new THREE.Points(geo, mat);
+    sceneGroup.add(gridPointsObject);
+  }
+  if(haloPositions.length){
+    const hg = new THREE.BufferGeometry();
+    hg.setAttribute("position", new THREE.Float32BufferAttribute(haloPositions,3));
+    const hm = new THREE.PointsMaterial({color:0xffffff, size:0.6, transparent:true, opacity:0.25, sizeAttenuation:true, depthWrite:false});
+    sceneGroup.add(new THREE.Points(hg, hm));
+  }
+}
+function buildGridWindLayer(){
+  if(!state.grid.showWind) return;
+  const idx = state.hourIndex, p = state.grid.windLevel;
+  const pts = state.grid.meta || [], data = state.grid.data || [];
+  const minE = state.grid.minElev || 0;
+  const exaggeration = state.grid.terrainExaggeration || 3;
+  pts.forEach(pt=>{
+    const d = data[pt.idx];
+    if(!d || !d.hourly) return;
+    const wsArr = d.hourly[`wind_speed_${p}hPa`], wdArr = d.hourly[`wind_direction_${p}hPa`];
+    const ws = wsArr ? wsArr[idx] : null, wd = wdArr ? wdArr[idx] : null;
+    if(ws===null||ws===undefined||wd===null||wd===undefined) return;
+    const gphArr = d.hourly[`geopotential_height_${p}hPa`];
+    let gph = gphArr ? gphArr[idx] : null;
+    const elevation = d.elevation||0;
+    if(gph===null||gph===undefined) gph = isaHeightM(p)+elevation;
+    if(gph <= elevation+10) return; // level sits below this point's own terrain — don't draw
+
+    const heightKmAgl = (gph-elevation)/1000;
+    const terrainBaseY = ((elevation-minE)/1000) * UNIT_PER_KM * exaggeration;
+
+    const toDeg = (wd+180)%360, rad = toDeg*Math.PI/180;
+    const dir = new THREE.Vector3(Math.sin(rad),0,-Math.cos(rad)).normalize();
+    const len = Math.min(0.5+ws/22, 3.4);
+    const origin = new THREE.Vector3(pt.xKm*HORIZ_UNIT_PER_KM, terrainBaseY+heightKmAgl*UNIT_PER_KM, pt.yKm*HORIZ_UNIT_PER_KM);
+    const arrow = new THREE.ArrowHelper(dir, origin, len, windToColor(ws), len*0.3, len*0.16);
+    sceneGroup.add(arrow);
+  });
+}
+function renderGridDetail(i){
+  const box = $("detailBox");
+  if(i===null || !gridVertexMeta[i]){
+    box.innerHTML = `<div class="dEmpty">격자의 점을 클릭하거나<br>마우스를 올리면 상세 정보가 표시됩니다.</div>`;
+    return;
+  }
+  const m = gridVertexMeta[i];
+  const below = gridVertexMeta[i-1];
+  const invNote = (below && below.pointIdx===m.pointIdx && m.temp>below.temp+0.15)
+    ? `<div class="dLine"><span class="k"></span><span class="badge inv">기온역전 감지</span></div>` : "";
+  box.innerHTML = `
+    <div class="dLine"><span class="k">격자 위치</span><b>X ${m.xKm>=0?'+':''}${m.xKm}, Y ${m.yKm>=0?'+':''}${m.yKm} km</b></div>
+    <div class="dLine"><span class="k">좌표</span><b>${m.lat.toFixed(3)}, ${m.lon.toFixed(3)}</b></div>
+    <div class="dLine"><span class="k">지표 고도(지형)</span><b>${Math.round(m.elevation)} m</b></div>
+    <div class="dLine"><span class="k">기압면</span><b>${m.p} hPa</b></div>
+    <div class="dLine"><span class="k">고도(지표 기준)</span><b>${m.heightKm.toFixed(2)} km</b></div>
+    <div class="dLine"><span class="k">기온</span><b>${m.temp.toFixed(1)} °C</b></div>
+    <div class="dLine"><span class="k">상대습도</span><b>${m.rh!==null?Math.round(m.rh):'-'} %</b></div>
+    <div class="dLine"><span class="k">풍속</span><b>${m.windSpeed!==null?m.windSpeed.toFixed(1):'-'} km/h</b></div>
+    <div class="dLine"><span class="k">풍향</span><b>${m.windDir!==null?Math.round(m.windDir)+'° '+degToCompass(m.windDir):'-'}</b></div>
+    ${invNote}
+  `;
+}
+
+/* ======================= DISPLAY UPDATE ======================= */
+function updateAllDisplays(){
+  updateSurfaceBox();
+  updateTimeLabel();
+  if(state.mode==="point") renderDetail(selectedIndex);
+  else renderGridDetail(selectedGridIdx);
+}
+function updateSurfaceBox(){
+  const el = $("surfaceBox");
+  if(state.mode==="point"){
+    if(el.dataset.mode!=="point"){ el.innerHTML = surfaceBoxDefaultHTML; el.dataset.mode="point"; }
+    const idx = state.hourIndex;
+    $("sLoc").textContent = state.locationName;
+    $("sTemp").textContent = fmt(getHourlyVal("temperature_2m", idx))+"°C";
+    $("sFeels").textContent = fmt(getHourlyVal("apparent_temperature", idx))+"°C";
+    $("sHum").textContent = fmt(getHourlyVal("relative_humidity_2m", idx),0)+"%";
+    const ws = getHourlyVal("wind_speed_10m", idx), wd = getHourlyVal("wind_direction_10m", idx);
+    $("sWind").textContent = (ws!==null? fmt(ws,0)+"km/h "+(wd!==null?degToCompass(wd):"") : "-");
+    $("sPres").textContent = fmt(getHourlyVal("surface_pressure", idx),0)+"hPa";
+    $("sCloud").textContent = fmt(getHourlyVal("cloud_cover", idx),0)+"%";
+    $("sPrecip").textContent = fmt(getHourlyVal("precipitation", idx),1)+"mm";
+  } else {
+    el.dataset.mode = "grid";
+    const cfg = state.grid;
+    const sample = cfg.data ? cfg.data.find(d=>d && d.hourly) : null;
+    const t = sample ? sample.hourly.time[state.hourIndex] : null;
+    const timeStr = t ? new Date(t+"Z").toLocaleString('ko-KR', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'UTC'})+" UTC" : "-";
+    const count = cfg.meta ? cfg.meta.length : 0;
+    el.innerHTML = `
+      <div class="surfRow"><span>중심 위치</span><b>${cfg.locationName||'-'}</b></div>
+      <div class="surfRow"><span>격자 범위</span><b>${cfg.extentKm}×${cfg.extentKm}km</b></div>
+      <div class="surfRow"><span>격자 간격/지점수</span><b>${cfg.spacingKm}km · ${count}개</b></div>
+      <div class="surfRow"><span>지형 고도 범위</span><b>${cfg.minElev!=null?Math.round(cfg.minElev):'-'}~${cfg.maxElev!=null?Math.round(cfg.maxElev):'-'}m</b></div>
+      <div class="surfRow"><span>예보 기간</span><b>${cfg.days}일</b></div>
+      <div class="surfRow"><span>표시 시각</span><b>${timeStr}</b></div>
+    `;
+  }
+}
+function updateTimeLabel(){
+  if(state.mode==="point"){
+    const t = state.data && state.data.hourly ? state.data.hourly.time[state.hourIndex] : null;
+    if(!t){ timeValue.textContent="-"; return; }
+    const d = new Date(t);
+    timeValue.textContent = d.toLocaleString('ko-KR', {month:'numeric', day:'numeric', weekday:'short', hour:'2-digit', minute:'2-digit'});
+  } else {
+    const sample = state.grid.data ? state.grid.data.find(d=>d && d.hourly) : null;
+    const t = sample ? sample.hourly.time[state.hourIndex] : null;
+    if(!t){ timeValue.textContent="-"; return; }
+    const d = new Date(t+"Z");
+    timeValue.textContent = d.toLocaleString('ko-KR', {month:'numeric', day:'numeric', weekday:'short', hour:'2-digit', minute:'2-digit', timeZone:'UTC'})+" UTC";
+  }
+}
+
 /* ======================= TIME SLIDER / PLAY ======================= */
 timeSlider.addEventListener("input", ()=>{
   state.hourIndex = parseInt(timeSlider.value,10);
-  if(state.data){ buildLevels_refreshOnly(); updateAllDisplays(); }
+  if(state.mode==="point" && state.data){ rebuildScene({keepCamera:true}); updateAllDisplays(); }
+  if(state.mode==="grid" && state.grid.data){ rebuildScene({keepCamera:true}); updateAllDisplays(); }
 });
-function buildLevels_refreshOnly(){
-  // rebuild dynamic (per-hour) parts only, keep ground
-  const toRemove = sceneGroup.children.filter(c=>!(c.type==="PolarGridHelper") && c.userData.__ground!==true);
-  // simplest robust approach: full rebuild (levels count is small, cheap)
-  rebuildScene();
-}
 $("playBtn").addEventListener("click", (e)=>{
   state.playing = !state.playing;
   e.currentTarget.textContent = state.playing ? "⏸ 정지" : "▶ 재생";
