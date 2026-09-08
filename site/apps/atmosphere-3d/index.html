@@ -85,6 +85,18 @@
   #gridCountLabel{font-size:11px;color:var(--text-dim);white-space:nowrap;}
   #gridCountLabel.warn{color:var(--accent2);}
 
+  /* ---------- 2D top-down map panel (grid mode) ---------- */
+  #map2dPanel{
+    position:absolute;top:64px;left:12px;z-index:10;width:244px;max-width:44vw;
+    background:var(--panel);border:1px solid var(--panel-border);border-radius:14px;
+    padding:12px 13px;backdrop-filter:blur(8px);font-size:11.5px;display:none;
+  }
+  #map2dHeader{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px;}
+  #map2dHeader span{color:var(--text-dim);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;}
+  #map2dHeader select{padding:5px 6px;font-size:11.5px;}
+  #map2dCanvas{display:block;width:100%;aspect-ratio:1/1;border-radius:10px;border:1px solid var(--panel-border);background:#0a1220;}
+  #map2dNote{margin-top:7px;color:var(--text-dim);font-size:10.5px;line-height:1.4;}
+
   /* ---------- side panel ---------- */
   #sidePanel{
     position:absolute;top:64px;right:12px;z-index:10;width:250px;max-width:44vw;
@@ -168,6 +180,9 @@
     #timeLabel{min-width:110px;font-size:11px;}
     #hint{display:none;}
     #topbar{padding-left:56px;}
+    #map2dPanel{width:132px;max-width:38vw;padding:8px 9px;font-size:9.5px;}
+    #map2dHeader{flex-direction:column;align-items:stretch;gap:4px;}
+    #map2dNote{display:none;}
   }
 </style>
 </head>
@@ -213,11 +228,38 @@
       <span id="gridCountLabel">6×6 = 36지점</span>
       <button class="btn small" id="loadGridBtn">격자 (재)불러오기</button>
       <label class="chk"><input type="checkbox" id="windToggle" checked> 바람 화살표 (전 고도)</label>
+      <label class="chk"><input type="checkbox" id="map2dToggle" checked> 2D 지도</label>
     </div>
 
     <button class="btn" id="autoRotateBtn" title="자동 회전">🔄 자동회전</button>
     <button class="btn" id="resetViewBtn" title="시점 초기화">시점 초기화</button>
     <button class="btn" id="infoToggleBtn" title="정보 패널 표시/숨김">ℹ️ 정보</button>
+  </div>
+
+  <div id="map2dPanel" class="gridOnly">
+    <div id="map2dHeader">
+      <span>2D 평면도 (레이더 스타일)</span>
+      <select class="sel" id="map2dLevelSel">
+        <option value="surface" selected>지표(2m)</option>
+        <option value="1000">1000hPa</option>
+        <option value="900">900hPa</option>
+        <option value="800">800hPa</option>
+        <option value="700">700hPa</option>
+        <option value="600">600hPa</option>
+        <option value="500">500hPa</option>
+        <option value="400">400hPa</option>
+        <option value="300">300hPa</option>
+        <option value="200">200hPa</option>
+        <option value="100">100hPa</option>
+        <option value="50">50hPa</option>
+      </select>
+    </div>
+    <canvas id="map2dCanvas" width="220" height="220"></canvas>
+    <div class="legendRow" style="margin-top:6px;">
+      <div class="legendBar" style="background:linear-gradient(to right,#1a2a8f,#2f6fd6,#39c0c9,#5fd66b,#e8e04a,#ef7f2e,#c22b2b);"></div>
+    </div>
+    <div class="legendLabels"><span>-60°C</span><span>0</span><span>40°C</span></div>
+    <div id="map2dNote">색=기온, 흰 화살표=바람(방향·길이=풍속) · 위=북쪽</div>
   </div>
 
   <div id="sidePanel">
@@ -320,6 +362,7 @@ let state = {
     meta: null, data: null,
     centerLat: null, centerLon: null, centerElevation: null, locationName: null,
     showWind: true,
+    show2D: true,
     lastFetch: null,
   }
 };
@@ -508,7 +551,7 @@ function buildGridMeta(centerLat, centerLon, extentKm, spacingKm){
   return pts;
 }
 function buildGridForecastUrl(latsCsv, lonsCsv, days){
-  const surfaceVars = ["temperature_2m","cloud_cover"];
+  const surfaceVars = ["temperature_2m","cloud_cover","wind_speed_10m","wind_direction_10m"];
   const levelVars = ["temperature","relative_humidity","cloud_cover","wind_speed","wind_direction","geopotential_height"];
   const levelParams = [];
   LEVELS.forEach(p=>levelVars.forEach(v=>levelParams.push(`${v}_${p}hPa`)));
@@ -636,6 +679,8 @@ function setMode(m){
       fetchGridData(lat, lon, elevation, name);
     }
   }
+  syncMap2D();
+  positionSidePanels();
 }
 $("modePointBtn").addEventListener("click", ()=>setMode("point"));
 $("modeGridBtn").addEventListener("click", ()=>setMode("grid"));
@@ -652,6 +697,11 @@ $("windToggle").addEventListener("change", (e)=>{
   state.grid.showWind = e.target.checked;
   if(state.mode==="grid" && state.grid.data) rebuildScene({keepCamera:true});
 });
+$("map2dToggle").addEventListener("change", (e)=>{
+  state.grid.show2D = e.target.checked;
+  syncMap2D();
+});
+$("map2dLevelSel").addEventListener("change", ()=>{ drawMap2D(); });
 updateGridCountLabel();
 
 /* ======================= SEARCH UI ======================= */
@@ -787,6 +837,26 @@ function onResize(){
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  positionSidePanels();
+}
+function positionSidePanels(){
+  // The top bar wraps to a second row whenever grid-mode controls are shown
+  // (and can wrap further on narrow windows), so its height isn't fixed.
+  // Anchor the floating side/2D-map panels just below its actual rendered
+  // height instead of a hardcoded offset, so they never overlap it.
+  const topbar = $("topbar");
+  const sp = $("sidePanel"), mp = $("map2dPanel");
+  if(!topbar) return;
+  const top = Math.max(56, Math.round(topbar.getBoundingClientRect().bottom) + 8) + "px";
+  if(window.innerWidth <= 640){
+    // Mobile layout repositions #sidePanel to the bottom via CSS (top:auto) — don't fight it.
+    if(sp) sp.style.top = "";
+  } else if(sp){
+    sp.style.top = top;
+  }
+  // #map2dPanel has no special mobile position, so it always follows the
+  // top bar's real (possibly wrapped) height, on every screen size.
+  if(mp) mp.style.top = top;
 }
 function updateCameraFromState(){
   const {radius, theta, phi, target} = camState;
@@ -1024,6 +1094,7 @@ function rebuildScene(opts={}){
     buildGridTerrain();
     buildGridPointCloud();
     buildGridWindLayer();
+    syncMap2D();
   }
   if(!opts.keepCamera) frameScene();
 }
@@ -1443,6 +1514,116 @@ function buildGridWindLayer(){
   if(mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   sceneGroup.add(mesh);
 }
+
+/* ---------- 2D top-down map (radar-style flat view, next to the 3D scene) ---------- */
+function syncMap2D(){
+  const panel = $("map2dPanel");
+  if(!panel) return;
+  const show = state.mode==="grid" && state.grid.show2D && !!state.grid.data;
+  panel.style.display = show ? "block" : "none";
+  if(show) drawMap2D();
+}
+function levelValueAt(d, idx, levelSel){
+  // Returns {temp, ws, wd} for either "surface" or a numeric hPa level string,
+  // applying the same below-terrain filter used by the 3D view.
+  if(!d || !d.hourly) return {temp:null, ws:null, wd:null};
+  if(levelSel==="surface"){
+    const temp = d.hourly.temperature_2m ? d.hourly.temperature_2m[idx] : null;
+    const ws = d.hourly.wind_speed_10m ? d.hourly.wind_speed_10m[idx] : null;
+    const wd = d.hourly.wind_direction_10m ? d.hourly.wind_direction_10m[idx] : null;
+    return {temp: temp===undefined?null:temp, ws: ws===undefined?null:ws, wd: wd===undefined?null:wd};
+  }
+  const p = parseInt(levelSel,10);
+  const tArr = d.hourly[`temperature_${p}hPa`];
+  let temp = tArr ? tArr[idx] : null;
+  const wsArr = d.hourly[`wind_speed_${p}hPa`], wdArr = d.hourly[`wind_direction_${p}hPa`];
+  let ws = wsArr ? wsArr[idx] : null, wd = wdArr ? wdArr[idx] : null;
+  if(temp===undefined) temp=null;
+  if(ws===undefined) ws=null;
+  if(wd===undefined) wd=null;
+  const elevation = d.elevation||0;
+  const gphArr = d.hourly[`geopotential_height_${p}hPa`];
+  let gph = gphArr ? gphArr[idx] : null;
+  if(gph===null||gph===undefined) gph = isaHeightM(p)+elevation;
+  if(gph <= elevation+10){ temp=null; ws=null; wd=null; } // level sits below this point's own terrain
+  return {temp, ws, wd};
+}
+function drawMap2D(){
+  const canvas = $("map2dCanvas");
+  if(!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const cfg = state.grid;
+  const pts = cfg.meta, data = cfg.data;
+  const n = cfg.nSide;
+  ctx.clearRect(0,0,W,H);
+  if(!pts || !pts.length || !data || !n || n<2){
+    ctx.fillStyle = "#0a1220"; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = "#8fa0bd"; ctx.font = "11px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline="middle";
+    ctx.fillText("격자 자료를 불러오면 표시됩니다", W/2, H/2);
+    return;
+  }
+  const idx = state.hourIndex;
+  const levelSel = $("map2dLevelSel").value;
+
+  // 1) temperature raster: fill a small n×n canvas, then upscale with smoothing
+  // for a soft, "radar composite"-like gradient instead of blocky cells.
+  const small = document.createElement("canvas");
+  small.width = n; small.height = n;
+  const sctx = small.getContext("2d");
+  const simg = sctx.createImageData(n, n);
+  for(let iy=0; iy<n; iy++){
+    for(let ix=0; ix<n; ix++){
+      const d = data[iy*n+ix];
+      const {temp} = levelValueAt(d, idx, levelSel);
+      const rasterRow = n-1-iy; // flip vertically so north (higher iy) ends up at the top
+      const off = (rasterRow*n+ix)*4;
+      if(temp===null){
+        simg.data[off]=10; simg.data[off+1]=16; simg.data[off+2]=32; simg.data[off+3]=255;
+      } else {
+        const [r,g,b] = cToColor(temp);
+        simg.data[off]=r; simg.data[off+1]=g; simg.data[off+2]=b; simg.data[off+3]=255;
+      }
+    }
+  }
+  sctx.putImageData(simg, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(small, 0, 0, n, n, 0, 0, W, H);
+
+  // 2) wind arrows: direction + length (∝ speed), white for visibility over the color fill.
+  ctx.strokeStyle = "#ffffff"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 1.3;
+  const maxLen = Math.max(6, (W/n)*0.8);
+  for(let iy=0; iy<n; iy++){
+    for(let ix=0; ix<n; ix++){
+      const d = data[iy*n+ix];
+      const {ws, wd} = levelValueAt(d, idx, levelSel);
+      if(ws===null||wd===null) continue;
+      const rasterRow = n-1-iy;
+      const px = (ix+0.5)/n*W, py = (rasterRow+0.5)/n*H;
+      const toDeg = (wd+180)%360, rad = toDeg*Math.PI/180;
+      const dx = Math.sin(rad), dy = -Math.cos(rad); // canvas +Y is down, so north(up) = -Y
+      const len = Math.min(5 + ws*0.55, maxLen);
+      const ex = px+dx*len, ey = py+dy*len;
+      ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(ex,ey); ctx.stroke();
+      const ah = 3.4, ang = Math.atan2(ey-py, ex-px);
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex-ah*Math.cos(ang-0.45), ey-ah*Math.sin(ang-0.45));
+      ctx.lineTo(ex-ah*Math.cos(ang+0.45), ey-ah*Math.sin(ang+0.45));
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // 3) center marker (search location) + cardinal direction labels
+  ctx.fillStyle = "#ff5252"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(W/2, H/2, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = "#e8eef7"; ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText("N", W/2, 4);
+  ctx.textBaseline = "bottom"; ctx.fillText("S", W/2, H-4);
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText("W", 5, H/2);
+  ctx.textAlign = "right"; ctx.fillText("E", W-5, H/2);
+}
 function renderGridDetail(i){
   const box = $("detailBox");
   if(i===null || !gridVertexMeta[i]){
@@ -1543,6 +1724,7 @@ $("playBtn").addEventListener("click", (e)=>{
 
 /* ======================= INIT ======================= */
 initThree();
+positionSidePanels();
 loadLocation(state.lat, state.lon, state.elevation, state.locationName);
 
 })();
