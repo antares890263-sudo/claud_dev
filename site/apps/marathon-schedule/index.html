@@ -219,6 +219,7 @@
   }
   .badge.open{background:var(--open-bg); color:var(--open);}
   .badge.closed{background:var(--closed-bg); color:var(--closed);}
+  .badge.unknown{background:var(--closed-bg); color:var(--closed);}
 
   .card-meta{display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-soft); margin-bottom:10px; flex-wrap:wrap;}
   .card-meta svg{flex:none; opacity:.7;}
@@ -415,7 +416,7 @@
         대회 정보 검색해서 확인하기
       </a>
     </div>
-    <div class="modal-note">외부 검색 결과로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.</div>
+    <div class="modal-note" id="modalNote">외부 검색 결과로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.</div>
   </div>
 </div>
 
@@ -545,7 +546,11 @@
     const d = new Date(deadline + "T00:00:00");
     return Math.round((d - today) / 86400000);
   }
-  function statusLabel(status){ return status === "open" ? "접수중" : "접수마감"; }
+  function statusLabel(status){
+    if (status === "open") return "접수중";
+    if (status === "unknown") return "상태 확인필요";
+    return "접수마감";
+  }
   function typeLabel(type){ return type === "trail" ? "트레일" : "로드"; }
   function relTime(iso){
     if (!iso) return "";
@@ -565,10 +570,11 @@
       day: ev.day || "",
       location: ev.location || "",
       distances: Array.isArray(ev.distances) ? ev.distances : [],
-      status: ev.status === "open" ? "open" : "closed",
+      status: ev.status === "open" ? "open" : (ev.status === "unknown" ? "unknown" : "closed"),
       deadline: ev.deadline || null,
       type: ev.type === "trail" ? "trail" : "road",
       region: ev.region || currentRegion,
+      url: ev.url || null,
     };
   }
 
@@ -878,7 +884,17 @@
       <div class="modal-field-row">${f.icon}<span><b>${f.label}</b><span class="v">${f.value}</span></span></div>
     `).join("");
 
-    document.getElementById("modalSearchLink").href = `https://www.google.com/search?q=${encodeURIComponent(ev.name + " " + (parts[0]||"") + " 접수")}`;
+    const searchLink = document.getElementById("modalSearchLink");
+    const modalNote = document.getElementById("modalNote");
+    if (ev.url){
+      searchLink.href = ev.url;
+      searchLink.lastChild.textContent = "대회 상세페이지 열기";
+      modalNote.textContent = "대회 정보 출처 페이지로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
+    } else {
+      searchLink.href = `https://www.google.com/search?q=${encodeURIComponent(ev.name + " " + (parts[0]||"") + " 접수")}`;
+      searchLink.lastChild.textContent = "대회 정보 검색해서 확인하기";
+      modalNote.textContent = "외부 검색 결과로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
+    }
 
     backdrop.classList.add("open");
     document.body.style.overflow = "hidden";
