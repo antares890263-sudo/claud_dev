@@ -36,6 +36,7 @@ const MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const REGIONS = [
   "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
   "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+  "전국", "기타",
 ];
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -353,6 +354,175 @@ function extractFromJsonLd(html) {
   return events;
 }
 
+/**
+ * str[start]가 배열을 여는 '[' 라고 가정하고, 대괄호 깊이를 세어 짝이 맞는 ']' 까지의
+ * 부분 문자열을 잘라 반환한다 (extractBalancedJson의 배열 버전).
+ */
+function extractBalancedArray(str, start) {
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < str.length; i++) {
+    const ch = str[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === "[") depth++;
+    else if (ch === "]") {
+      depth--;
+      if (depth === 0) return str.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * extractBalancedArray의 "이스케이프된 JSON" 버전. Next.js는 페이지의 리액트 엘리먼트
+ * 트리를 self.__next_f.push([1, "23:[...]"]) 형태로 흘려보내는데, 이 두 번째 인자 자체가
+ * 하나의 JSON 문자열이라서 그 안의 모든 큰따옴표가 \" 로 이스케이프되어 있다. 그래서
+ * "races":[...] 앵커도 실제로는 \"races\":[ 형태로 나타난다. 이 경우 문자열 경계는
+ * (일반 큰따옴표가 아니라) \" 토큰으로 판단해야 한다.
+ */
+function extractBalancedArrayEscaped(str, start) {
+  let depth = 0;
+  let inStr = false;
+  let i = start;
+  while (i < str.length) {
+    if (inStr) {
+      if (str[i] === "\\" && str[i + 1] === "\\") {
+        i += 2;
+        continue;
+      }
+      if (str[i] === "\\" && str[i + 1] === '"') {
+        inStr = false;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (str[i] === "\\" && str[i + 1] === '"') {
+      inStr = true;
+      i += 2;
+      continue;
+    }
+    if (str[i] === "[") {
+      depth++;
+      i++;
+      continue;
+    }
+    if (str[i] === "]") {
+      depth--;
+      i++;
+      if (depth === 0) return str.slice(start, i);
+      continue;
+    }
+    i++;
+  }
+  return null;
+}
+
+/**
+ * marathonmate.store가 서버에서 렌더링한 React 컴포넌트 props 안에는
+ * 그 페이지가 실제로 보여주는(=지역·접수상태 필터가 이미 적용된) 대회 목록이
+ * "races":[...] 형태의 순수 JSON 배열로 그대로 박혀 있다. JSON-LD보다 훨씬
+ * 정확하고 완전한 소스라서 이걸 최우선으로 찾는다.
+ *
+ * 이 배열은 페이지에 두 가지 형태로 나타날 수 있다:
+ *  1) 일반 텍스트 그대로: "races":[{"id":...}]
+ *  2) Next.js 스트리밍 페이로드 안에서 JSON 문자열로 한 번 더 감싸져
+ *     이스케이프된 형태: \"races\":[{\"id\":...}]
+ * 두 형태를 모두 찾아 시도한다.
+ */
+function extractRacesArray(html) {
+  const plainAnchor = '"races":[';
+  const plainIdx = html.indexOf(plainAnchor);
+  if (plainIdx !== -1) {
+    const arrStart = plainIdx + plainAnchor.length - 1;
+    const arrStr = extractBalancedArray(html, arrStart);
+    if (arrStr) {
+      try {
+        const parsed = JSON.parse(arrStr);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        // 아래 escaped 형태로 계속 시도
+      }
+    }
+  }
+
+  const escapedAnchor = '\\"races\\":[';
+  const escapedIdx = html.indexOf(escapedAnchor);
+  if (escapedIdx !== -1) {
+    const arrStart = escapedIdx + escapedAnchor.length - 1;
+    const escapedArrStr = extractBalancedArrayEscaped(html, arrStart);
+    if (escapedArrStr) {
+      try {
+        const unescaped = JSON.parse('"' + escapedArrStr + '"');
+        const parsed = JSON.parse(unescaped);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        // 파싱 실패 — null 반환
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeDistanceLabel(d) {
+  if (typeof d !== "string") return String(d);
+  const m = d.match(/^(\d+(?:\.\d+)?)\s*K$/);
+  if (m) return `${m[1]}km`;
+  return d;
+}
+
+/** races 배열의 한 항목(marathonmate 자체 데이터 모델)을 앱이 쓰는 이벤트 형태로 변환한다. */
+function mapRace(r, statusFromQuery) {
+  if (!r || !r.id || !r.title || !r.date) return null;
+  const date = normalizeDate(r.date);
+  if (!date) return null;
+  const loc = r.location || null;
+  const isTrail = /트레일|trail/i.test(r.title) || (loc && /트레일|trail/i.test(loc));
+  return {
+    id: r.id,
+    name: r.title,
+    date,
+    day: dowFor(date),
+    location: loc,
+    distances: Array.isArray(r.distances) ? r.distances.map(normalizeDistanceLabel) : [],
+    status: statusFromQuery,
+    deadline: normalizeDate(r.registrationEndDate),
+    region: r.region || null,
+    type: isTrail ? "trail" : "road",
+    url: `https://marathonmate.store/race/${r.id}`,
+  };
+}
+
+/**
+ * 요청받은 region(또는 "all")에 대해, marathonmate.store가 실제로 쓰는 3가지
+ * 접수상태 필터(접수전/접수중/접수마감)에 해당하는 업스트림 URL 목록을 만든다.
+ * region이 없으면(=?region= 파라미터를 아예 안 넣으면) 전국 통합 목록이 나온다.
+ */
+function buildUpstreamTargets(region) {
+  const regionQ = region && region !== "all" ? `region=${encodeURIComponent(region)}` : "";
+  const withRegion = (extra) => {
+    const parts = [regionQ, extra].filter(Boolean);
+    return parts.length ? `${UPSTREAM}?${parts.join("&")}` : UPSTREAM;
+  };
+  return [
+    { status: "open", url: withRegion("") },
+    { status: "pre_open", url: withRegion("status=pre_open") },
+    { status: "closed", url: withRegion("status=closed") },
+  ];
+}
+
 const EXTRACT_SYSTEM_PROMPT = `너는 한국 마라톤/러닝 대회 일정 페이지의 텍스트를 구조화된 JSON으로 변환하는 파서다.
 아래에 웹페이지에서 태그를 제거한 본문 텍스트가 주어진다. 이 텍스트에서 "대회 목록" 항목들을 찾아
 각 대회마다 다음 필드를 가진 객체로 만들어라:
@@ -409,6 +579,12 @@ export {
   findRowStart,
   findRowEnd,
   computeScriptRanges,
+  extractBalancedArray,
+  extractBalancedArrayEscaped,
+  extractRacesArray,
+  normalizeDistanceLabel,
+  mapRace,
+  buildUpstreamTargets,
 };
 
 export default {
@@ -448,20 +624,31 @@ export default {
       }
     }
 
-    // region별 필터는 우리가 직접(대회 장소 텍스트 기준으로) 하기 때문에,
-    // 업스트림에는 항상 필터 없는 전체 목록을 요청한다 — upstream의 지역 파라미터가
-    // 실제로 필터링을 하는지 확신할 수 없어도 결과 정확도에 영향이 없게 하기 위함.
-    const target = UPSTREAM;
+    // marathonmate.store는 접수전/접수중/접수마감 3개 상태를 별도 쿼리(?status=...)로만
+    // 보여준다(기본값은 접수중). 그래서 완전한 목록을 얻으려면 3번 다 가져와야 한다.
+    // region을 넣으면 업스트림이 이미 그 지역으로 정확히 필터링해서 내려주므로,
+    // 우리가 텍스트로 추측할 필요가 없다 (region=all이면 region 파라미터 없이 요청 —
+    // 이러면 업스트림이 전국 통합 목록을 내려준다).
+    const targets = buildUpstreamTargets(region);
 
-    let html;
+    let fetchResults;
     try {
-      const upstreamRes = await fetch(target, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; MarathonScheduleBot/1.0; personal aggregator)",
-          "Accept-Language": "ko-KR,ko;q=0.9",
-        },
-      });
-      html = await upstreamRes.text();
+      fetchResults = await Promise.all(
+        targets.map(async (t) => {
+          try {
+            const res = await fetch(t.url, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (compatible; MarathonScheduleBot/1.0; personal aggregator)",
+                "Accept-Language": "ko-KR,ko;q=0.9",
+              },
+            });
+            const html = await res.text();
+            return { status: t.status, url: t.url, html, ok: true };
+          } catch (err) {
+            return { status: t.status, url: t.url, html: "", ok: false, error: String(err) };
+          }
+        })
+      );
     } catch (err) {
       const body = {
         region, fetchedAt: new Date().toISOString(), events: [],
@@ -472,56 +659,96 @@ export default {
       });
     }
 
+    if (fetchResults.every((r) => !r.ok)) {
+      const body = {
+        region, fetchedAt: new Date().toISOString(), events: [],
+        error: "upstream_fetch_failed",
+        detail: fetchResults.map((r) => r.error).filter(Boolean).join("; "),
+      };
+      return new Response(JSON.stringify(body), {
+        status: 502, headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+      });
+    }
+
     let allEvents = [];
-    let source = "jsonld";
-    try {
-      allEvents = extractFromJsonLd(html);
-    } catch (e) {
-      allEvents = [];
+    let source = "races";
+    const seen = new Set();
+    let totalHtmlLength = 0;
+    for (const r of fetchResults) {
+      totalHtmlLength += r.html.length;
+      let races;
+      try {
+        races = extractRacesArray(r.html);
+      } catch (e) {
+        races = null;
+      }
+      if (!races) continue;
+      for (const raw of races) {
+        const mapped = mapRace(raw, r.status);
+        if (!mapped) continue;
+        const key = mapped.id || `${mapped.name}__${mapped.date}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allEvents.push(mapped);
+      }
     }
 
     let aiDebug = null;
     if (allEvents.length === 0) {
-      // JSON-LD를 못 찾았을 때만 예비로 AI 추출을 시도한다 (무료 한도 절약)
-      source = "ai";
-      if (!env.AI) {
-        const body = {
-          region, fetchedAt: new Date().toISOString(), events: [],
-          error: "no_data_found",
-          debug: { htmlLength: html.length, source: "none", note: "JSON-LD를 찾지 못했고 AI 바인딩도 없습니다." },
-        };
-        return new Response(JSON.stringify(body), {
-          headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
-        });
-      }
+      // races 배열을 하나도 못 찾았을 때만(=사이트 구조가 크게 바뀐 경우) JSON-LD로,
+      // 그마저 안 되면 AI로 순서대로 예비 시도한다.
+      const primaryHtml = fetchResults.find((r) => r.ok && r.html)?.html || "";
       try {
-        const extraction = await extractEventsWithAi(env, html);
-        allEvents = extraction.events;
-        aiDebug = { rawSample: extraction.rawSample, textPreview: extraction.textPreview };
-      } catch (err) {
-        const body = {
-          region, fetchedAt: new Date().toISOString(), events: [],
-          error: "ai_extract_failed", detail: String(err),
-          debug: { htmlLength: html.length, source: "none" },
-        };
-        return new Response(JSON.stringify(body), {
-          headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
-        });
+        allEvents = extractFromJsonLd(primaryHtml);
+        if (allEvents.length > 0) source = "jsonld";
+      } catch (e) {
+        allEvents = [];
+      }
+
+      if (allEvents.length === 0) {
+        source = "ai";
+        if (!env.AI) {
+          const body = {
+            region, fetchedAt: new Date().toISOString(), events: [],
+            error: "no_data_found",
+            debug: { htmlLength: totalHtmlLength, source: "none", note: "races 배열과 JSON-LD를 모두 찾지 못했고 AI 바인딩도 없습니다." },
+          };
+          return new Response(JSON.stringify(body), {
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+          });
+        }
+        try {
+          const extraction = await extractEventsWithAi(env, primaryHtml);
+          allEvents = extraction.events;
+          aiDebug = { rawSample: extraction.rawSample, textPreview: extraction.textPreview };
+        } catch (err) {
+          const body = {
+            region, fetchedAt: new Date().toISOString(), events: [],
+            error: "ai_extract_failed", detail: String(err),
+            debug: { htmlLength: totalHtmlLength, source: "none" },
+          };
+          return new Response(JSON.stringify(body), {
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+          });
+        }
       }
     }
 
+    // races/jsonld 소스는 이미 정확히 필터링된 상태로 오지만(특히 races는 업스트림이
+    // region으로 걸러줌), 혹시 모를 불일치를 방지하기 위해 region!=="all"이면 한 번 더 확인한다.
     const events =
-      region === "all" ? allEvents : allEvents.filter((e) => e.region === region);
+      region === "all" ? allEvents : allEvents.filter((e) => !e.region || e.region === region);
 
     const bodyObj = {
       region,
       fetchedAt: new Date().toISOString(),
       events,
       debug: {
-        htmlLength: html.length,
+        htmlLength: totalHtmlLength,
         source,
         totalEventsFound: allEvents.length,
         eventCount: events.length,
+        fetchedStatuses: fetchResults.map((r) => ({ status: r.status, ok: r.ok })),
         ...(aiDebug || {}),
       },
     };
