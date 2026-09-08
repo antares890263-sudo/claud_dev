@@ -220,6 +220,7 @@
   .badge.open{background:var(--open-bg); color:var(--open);}
   .badge.closed{background:var(--closed-bg); color:var(--closed);}
   .badge.unknown{background:var(--closed-bg); color:var(--closed);}
+  .badge.pre_open{background:var(--trail-soft); color:var(--trail-2);}
 
   .card-meta{display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-soft); margin-bottom:10px; flex-wrap:wrap;}
   .card-meta svg{flex:none; opacity:.7;}
@@ -548,6 +549,7 @@
   }
   function statusLabel(status){
     if (status === "open") return "접수중";
+    if (status === "pre_open") return "접수예정";
     if (status === "unknown") return "상태 확인필요";
     return "접수마감";
   }
@@ -570,7 +572,7 @@
       day: ev.day || "",
       location: ev.location || "",
       distances: Array.isArray(ev.distances) ? ev.distances : [],
-      status: ev.status === "open" ? "open" : (ev.status === "unknown" ? "unknown" : "closed"),
+      status: ["open","pre_open","unknown"].includes(ev.status) ? ev.status : "closed",
       deadline: ev.deadline || null,
       type: ev.type === "trail" ? "trail" : "road",
       region: ev.region || currentRegion,
@@ -710,7 +712,7 @@
   }
 
   // ---------- Filter tabs ----------
-  const STATUS_OPTIONS = [["all","전체"],["open","접수중"],["closed","접수마감"]];
+  const STATUS_OPTIONS = [["all","전체"],["open","접수중"],["pre_open","접수예정"],["closed","접수마감"]];
   const TYPE_OPTIONS = [["all","전체"],["road","로드"],["trail","트레일"]];
 
   function renderTabs(){
@@ -737,7 +739,7 @@
   function cardHTML(ev){
     const parts = ev.date.split("-").map(Number);
     const d = parts[2] || "?";
-    const closed = ev.status !== "open";
+    const closed = ev.status === "closed";
     const chips = ev.distances.map(dist => `<span class="chip">${dist}</span>`).join("");
     const regionChip = currentRegion === "all" ? `<span class="region-tag">${ev.region}</span>` : "";
     let deadlineNote = "";
