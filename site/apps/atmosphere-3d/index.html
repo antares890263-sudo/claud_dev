@@ -94,6 +94,14 @@
   }
   #sidePanel h3{margin:0 0 6px;font-size:12px;color:var(--text-dim);font-weight:600;
     text-transform:uppercase;letter-spacing:0.5px;}
+  #miniMapBox{position:relative;width:100%;aspect-ratio:1/1;border-radius:10px;overflow:hidden;
+    background:#0a1220;border:1px solid var(--panel-border);margin-bottom:10px;}
+  #miniMapImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity 0.2s;}
+  #miniMapMarker{position:absolute;width:11px;height:11px;left:50%;top:50%;
+    margin:-6px 0 0 -6px;border-radius:50%;background:#ff5252;border:2px solid #fff;
+    box-shadow:0 0 0 2px rgba(255,82,82,0.35),0 1px 4px rgba(0,0,0,0.6);}
+  #miniMapAttrib{position:absolute;bottom:2px;right:4px;font-size:8px;color:#ffffffb0;
+    background:#00000066;padding:1px 4px;border-radius:3px;}
   .surfRow{display:flex;justify-content:space-between;padding:2px 0;color:var(--text);gap:8px;}
   .surfRow span:first-child{white-space:nowrap;color:var(--text-dim);}
   .surfRow b{color:var(--accent);text-align:right;}
@@ -135,6 +143,18 @@
   #hint{position:absolute;bottom:88px;left:50%;transform:translateX(-50%);z-index:9;
     font-size:11px;color:var(--text-dim);background:rgba(10,16,32,0.6);padding:5px 12px;border-radius:20px;
     pointer-events:none;white-space:nowrap;}
+
+  #compassHud{position:absolute;left:16px;bottom:96px;z-index:9;width:62px;height:62px;pointer-events:none;}
+  #compassDial{position:relative;width:100%;height:100%;border-radius:50%;
+    background:rgba(10,16,32,0.6);border:1px solid var(--panel-border);backdrop-filter:blur(4px);}
+  #compassDial::before{content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;
+    margin:-1.5px 0 0 -1.5px;border-radius:50%;background:var(--text-dim);}
+  .cDir{position:absolute;font-size:11px;font-weight:700;color:var(--text-dim);line-height:1;}
+  .cDir span{display:inline-block;}
+  .cDir.cN{top:4px;left:50%;transform:translateX(-50%);color:var(--accent2);}
+  .cDir.cE{right:5px;top:50%;transform:translateY(-50%);}
+  .cDir.cS{bottom:4px;left:50%;transform:translateX(-50%);}
+  .cDir.cW{left:5px;top:50%;transform:translateY(-50%);}
 
   #sidePanel.collapsed{display:none;}
   .pointOnly{display:none;}
@@ -192,16 +212,7 @@
       </select>
       <span id="gridCountLabel">6×6 = 36지점</span>
       <button class="btn small" id="loadGridBtn">격자 (재)불러오기</button>
-      <label class="chk"><input type="checkbox" id="windToggle"> 바람장</label>
-      <select class="sel" id="windLevelSel">
-        <option value="1000">1000hPa</option>
-        <option value="925">925hPa</option>
-        <option value="850">850hPa</option>
-        <option value="700" selected>700hPa</option>
-        <option value="500">500hPa</option>
-        <option value="300">300hPa</option>
-        <option value="200">200hPa</option>
-      </select>
+      <label class="chk"><input type="checkbox" id="windToggle" checked> 바람 화살표 (전 고도)</label>
     </div>
 
     <button class="btn" id="autoRotateBtn" title="자동 회전">🔄 자동회전</button>
@@ -210,6 +221,11 @@
   </div>
 
   <div id="sidePanel">
+    <div id="miniMapBox">
+      <img id="miniMapImg" alt="" referrerpolicy="no-referrer" onerror="this.style.opacity='0';">
+      <div id="miniMapMarker"></div>
+      <div id="miniMapAttrib">© OpenStreetMap</div>
+    </div>
     <h3>현재 상태</h3>
     <div id="surfaceBox">
       <div class="surfRow"><span>위치</span><b id="sLoc">-</b></div>
@@ -231,16 +247,26 @@
       <div class="legendBar" style="background:linear-gradient(to right,#1a2a8f,#2f6fd6,#39c0c9,#5fd66b,#e8e04a,#ef7f2e,#c22b2b);"></div>
     </div>
     <div class="legendLabels"><span>-60</span><span>-20</span><span>0</span><span>20</span><span>40</span></div>
-    <h3 style="margin-top:10px;">바람 속도 범례 (화살표)</h3>
-    <div class="legendRow">
+    <h3 class="pointOnly" style="margin-top:10px;">바람 속도 범례 (화살표)</h3>
+    <div class="pointOnly legendRow">
       <div class="legendBar" style="background:linear-gradient(to right,#4fd1c5,#f2e05a,#ef7f2e,#e0392f);"></div>
     </div>
-    <div class="legendLabels"><span>0</span><span>~40</span><span>~80</span><span>km/h+</span></div>
+    <div class="pointOnly legendLabels"><span>0</span><span>~40</span><span>~80</span><span>km/h+</span></div>
     <div class="pointOnly" style="margin-top:8px;"><span class="badge inv">주황 띠 = 기온역전층</span></div>
+    <div class="gridOnly" style="margin-top:10px;font-size:11px;color:var(--text-dim);"><b style="color:var(--text);">바람 화살표</b>: 흰색, 방향=풍향, 길이=풍속 (길수록 강풍)</div>
     <div class="gridOnly" style="margin-top:8px;font-size:11px;color:var(--text-dim);line-height:1.5;">바닥의 굴곡면은 각 지점의 실제 지형 고도예요 (높낮이 차이가 잘 보이도록 수직 과장 적용, 색은 참고용). 지형이 높은 곳은 낮은 기압면(예: 1000hPa)이 그 지점에서 아예 표시되지 않아요 — 그 고도의 공기가 지면 아래라 존재하지 않기 때문. 점을 클릭하면 해당 격자·고도의 기온역전 여부도 표시돼요. 격자 모드는 UTC 시간 기준이며 수평·수직축 모두 과장되어 표시됩니다.</div>
   </div>
 
   <div id="hint">드래그: 회전 · 휠/핀치: 확대·축소 · 클릭: 상세정보</div>
+
+  <div id="compassHud" title="현재 화면 기준 방위">
+    <div id="compassDial">
+      <div class="cDir cN"><span>N</span></div>
+      <div class="cDir cE"><span>E</span></div>
+      <div class="cDir cS"><span>S</span></div>
+      <div class="cDir cW"><span>W</span></div>
+    </div>
+  </div>
 
   <div id="bottombar">
     <div id="timeRow">
@@ -269,6 +295,10 @@
 
 /* ======================= CONFIG ======================= */
 const LEVELS = [1000,975,950,925,900,850,800,700,600,500,400,300,250,200,150,100,70,50,30];
+// Coarser subset used for wind arrows in grid mode: showing an arrow at every one of the
+// 19 LEVELS would visually overlap near the surface (levels there are only ~150-250m apart),
+// so arrows are drawn only at these more widely-spaced standard levels.
+const WIND_LEVELS = [1000,900,800,700,600,500,400,300,200,100,50];
 const UNIT_PER_KM = 0.62;        // 3D scene units per km of altitude
 const HORIZ_UNIT_PER_KM = 0.16;  // 3D scene units per km of horizontal distance (grid mode)
 const MAX_SLIDER_HOURS = 72;
@@ -289,7 +319,7 @@ let state = {
     extentKm: 100, spacingKm: 20, days: 1, nSide: 6,
     meta: null, data: null,
     centerLat: null, centerLon: null, centerElevation: null, locationName: null,
-    showWind: false, windLevel: 700,
+    showWind: true,
     lastFetch: null,
   }
 };
@@ -379,6 +409,31 @@ function degToCompass(deg){
   return dirs[Math.round(deg/22.5)%16];
 }
 
+/* ---------- mini-map (real-world location preview, top-right side panel) ---------- */
+function pickMiniMapZoom(lat, extentKm){
+  if(!extentKm) return 8; // point mode: fixed regional zoom
+  const kmPerTileAtZ0 = 40075 * Math.cos(lat*Math.PI/180);
+  const z = Math.round(Math.log2(kmPerTileAtZ0 / (extentKm*1.4)));
+  return Math.max(2, Math.min(12, z));
+}
+function updateMiniMap(lat, lon, extentKm){
+  const zoom = pickMiniMapZoom(lat, extentKm);
+  const n = Math.pow(2, zoom);
+  const latRad = lat*Math.PI/180;
+  const worldX = (lon+180)/360*n;
+  const worldY = (1 - Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2*n;
+  const tileX = ((Math.floor(worldX)%n)+n)%n;
+  const tileY = Math.max(0, Math.min(n-1, Math.floor(worldY)));
+  const pxXPercent = (worldX-Math.floor(worldX))*100;
+  const pxYPercent = (worldY-Math.floor(worldY))*100;
+  const img = $("miniMapImg");
+  img.style.opacity = "1";
+  img.src = `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
+  const marker = $("miniMapMarker");
+  marker.style.left = pxXPercent.toFixed(2)+"%";
+  marker.style.top = pxYPercent.toFixed(2)+"%";
+}
+
 /* ======================= FETCH: GEOCODING ======================= */
 async function geocode(query){
   const trimmed = query.trim();
@@ -424,6 +479,7 @@ async function loadLocation(lat, lon, elevation, name){
     timeSlider.value = state.hourIndex;
     $("coordInfo").textContent = `좌표: ${lat.toFixed(3)}, ${lon.toFixed(3)} (고도 ${Math.round(state.elevation)}m)`;
     $("updatedInfo").textContent = `마지막 업데이트: ${state.lastFetch.toLocaleTimeString('ko-KR')}`;
+    updateMiniMap(lat, lon);
     hideStatus();
     rebuildScene();
     updateAllDisplays();
@@ -513,6 +569,7 @@ async function fetchGridData(centerLat, centerLon, elevationHint, name){
     const failCount = results.filter(r=>!r).length;
     $("coordInfo").textContent = `중심좌표: ${centerLat.toFixed(3)}, ${centerLon.toFixed(3)} · 격자 ${cfg.nSide}×${cfg.nSide} (${points.length}지점${failCount?`, 실패 ${failCount}`:''}) · UTC 기준`;
     $("updatedInfo").textContent = `마지막 업데이트: ${state.grid.lastFetch.toLocaleTimeString('ko-KR')}`;
+    updateMiniMap(centerLat, centerLon, cfg.extentKm);
     hideStatus();
     rebuildScene();
     updateAllDisplays();
@@ -594,10 +651,6 @@ $("loadGridBtn").addEventListener("click", ()=>{
 $("windToggle").addEventListener("change", (e)=>{
   state.grid.showWind = e.target.checked;
   if(state.mode==="grid" && state.grid.data) rebuildScene({keepCamera:true});
-});
-$("windLevelSel").addEventListener("change", (e)=>{
-  state.grid.windLevel = parseInt(e.target.value,10);
-  if(state.mode==="grid" && state.grid.showWind && state.grid.data) rebuildScene({keepCamera:true});
 });
 updateGridCountLabel();
 
@@ -742,6 +795,19 @@ function updateCameraFromState(){
   const z = target.z + radius*Math.sin(phi)*Math.cos(theta);
   camera.position.set(x,y,z);
   camera.lookAt(target);
+  updateCompassHud();
+}
+function updateCompassHud(){
+  // The scene's N/E/S/W ground labels are placed at fixed world positions
+  // (N = -Z, E = +X, S = +Z, W = -X). As the camera orbits by camState.theta
+  // around the vertical axis, true north's on-screen bearing rotates by
+  // exactly theta (clockwise) — so just spin the dial by theta and
+  // counter-rotate each letter so the text itself stays upright.
+  const dial = $("compassDial");
+  if(!dial) return;
+  const deg = camState.theta * 180/Math.PI;
+  dial.style.transform = `rotate(${deg}deg)`;
+  dial.querySelectorAll(".cDir span").forEach(sp=>{ sp.style.transform = `rotate(${-deg}deg)`; });
 }
 function setupPointerControls(dom){
   const pointers = new Map();
@@ -1296,34 +1362,86 @@ function buildGridPointCloud(){
     sceneGroup.add(new THREE.Points(hg, hm));
   }
 }
+/* ---------- wind arrow glyph (built fresh per rebuild — cheap, ~30 verts) ---------- */
+function mergeGeometriesManually(geometries){
+  const positions = [], normals = [];
+  geometries.forEach(g=>{
+    const ng = g.index ? g.toNonIndexed() : g;
+    const posAttr = ng.getAttribute("position");
+    const normAttr = ng.getAttribute("normal");
+    for(let i=0;i<posAttr.count;i++){
+      positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+      if(normAttr) normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
+    }
+  });
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
+  if(normals.length) merged.setAttribute("normal", new THREE.Float32BufferAttribute(normals,3));
+  return merged;
+}
+function buildUnitArrowGeometry(){
+  // Unit arrow (shaft+head) pointing along +Z, spanning z=0 (tail/anchor) to z=1 (tip).
+  // Instances are scaled uniformly by wind-speed-derived length, so proportions stay
+  // consistent regardless of size.
+  const shaftLen=0.7, shaftR=0.09, headLen=0.3, headR=0.22;
+  const shaft = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 6, 1, false);
+  shaft.rotateX(Math.PI/2);
+  shaft.translate(0,0, shaftLen/2);
+  const head = new THREE.ConeGeometry(headR, headLen, 8);
+  head.rotateX(Math.PI/2);
+  head.translate(0,0, shaftLen+headLen/2);
+  return mergeGeometriesManually([shaft, head]);
+}
 function buildGridWindLayer(){
   if(!state.grid.showWind) return;
-  const idx = state.hourIndex, p = state.grid.windLevel;
+  const idx = state.hourIndex;
   const pts = state.grid.meta || [], data = state.grid.data || [];
   const minE = state.grid.minElev || 0;
   const exaggeration = state.grid.terrainExaggeration || 3;
+
+  const instances = [];
   pts.forEach(pt=>{
     const d = data[pt.idx];
     if(!d || !d.hourly) return;
-    const wsArr = d.hourly[`wind_speed_${p}hPa`], wdArr = d.hourly[`wind_direction_${p}hPa`];
-    const ws = wsArr ? wsArr[idx] : null, wd = wdArr ? wdArr[idx] : null;
-    if(ws===null||ws===undefined||wd===null||wd===undefined) return;
-    const gphArr = d.hourly[`geopotential_height_${p}hPa`];
-    let gph = gphArr ? gphArr[idx] : null;
     const elevation = d.elevation||0;
-    if(gph===null||gph===undefined) gph = isaHeightM(p)+elevation;
-    if(gph <= elevation+10) return; // level sits below this point's own terrain — don't draw
-
-    const heightKmAgl = (gph-elevation)/1000;
     const terrainBaseY = ((elevation-minE)/1000) * UNIT_PER_KM * exaggeration;
+    WIND_LEVELS.forEach(p=>{
+      const wsArr = d.hourly[`wind_speed_${p}hPa`], wdArr = d.hourly[`wind_direction_${p}hPa`];
+      const ws = wsArr ? wsArr[idx] : null, wd = wdArr ? wdArr[idx] : null;
+      if(ws===null||ws===undefined||wd===null||wd===undefined) return;
+      const gphArr = d.hourly[`geopotential_height_${p}hPa`];
+      let gph = gphArr ? gphArr[idx] : null;
+      if(gph===null||gph===undefined) gph = isaHeightM(p)+elevation;
+      if(gph <= elevation+10) return; // level sits below this point's own terrain — don't draw
 
-    const toDeg = (wd+180)%360, rad = toDeg*Math.PI/180;
-    const dir = new THREE.Vector3(Math.sin(rad),0,-Math.cos(rad)).normalize();
-    const len = Math.min(0.5+ws/22, 3.4);
-    const origin = new THREE.Vector3(pt.xKm*HORIZ_UNIT_PER_KM, terrainBaseY+heightKmAgl*UNIT_PER_KM, pt.yKm*HORIZ_UNIT_PER_KM);
-    const arrow = new THREE.ArrowHelper(dir, origin, len, windToColor(ws), len*0.3, len*0.16);
-    sceneGroup.add(arrow);
+      const heightKmAgl = (gph-elevation)/1000;
+      const toDeg = (wd+180)%360, rad = toDeg*Math.PI/180;
+      const dir = new THREE.Vector3(Math.sin(rad),0,-Math.cos(rad)).normalize();
+      // Kept short relative to the ~0.15-1.3 unit vertical spacing between WIND_LEVELS
+      // so faster wind reads clearly without swallowing neighboring levels.
+      const len = Math.min(0.16 + ws*0.011, 0.62);
+      const pos = new THREE.Vector3(pt.xKm*HORIZ_UNIT_PER_KM, terrainBaseY+heightKmAgl*UNIT_PER_KM, pt.yKm*HORIZ_UNIT_PER_KM);
+      instances.push({pos, dir, len});
+    });
   });
+  if(!instances.length) return;
+
+  const geo = buildUnitArrowGeometry();
+  // Solid white for maximum contrast against the colored temperature dots and terrain —
+  // direction still shows wind direction and length still scales with wind speed.
+  const mat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.95});
+  const mesh = new THREE.InstancedMesh(geo, mat, instances.length);
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const zAxis = new THREE.Vector3(0,0,1);
+  instances.forEach((inst,i)=>{
+    q.setFromUnitVectors(zAxis, inst.dir);
+    m4.compose(inst.pos, q, new THREE.Vector3(inst.len, inst.len, inst.len));
+    mesh.setMatrixAt(i, m4);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  if(mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  sceneGroup.add(mesh);
 }
 function renderGridDetail(i){
   const box = $("detailBox");
