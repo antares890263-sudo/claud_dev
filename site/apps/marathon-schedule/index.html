@@ -113,34 +113,6 @@
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 12px center;
   }
-  .settings-toggle{
-    font-family:'Noto Sans KR', sans-serif; font-size:12.5px; color:var(--ink-soft); background:none; border:1px dashed var(--line);
-    border-radius:999px; padding:7px 13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; margin-left:auto;
-  }
-  .settings-toggle:hover{border-color:var(--forest); color:var(--forest);}
-
-  .settings-panel{
-    display:none; margin-top:16px; background:var(--card-1); border:1px solid var(--line); border-radius:var(--radius);
-    padding:18px 20px; position:relative;
-  }
-  .settings-panel.open{display:block;}
-  .settings-panel label{font-size:12.5px; font-weight:700; color:var(--ink); display:block; margin-bottom:6px;}
-  .settings-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;}
-  .settings-row input[type=text]{
-    flex:1 1 280px; font-family:'JetBrains Mono', monospace; font-size:13px; padding:9px 12px; border-radius:10px;
-    border:1px solid var(--line); background:var(--bg); color:var(--ink);
-  }
-  .settings-row button{
-    font-family:'Noto Sans KR', sans-serif; font-weight:700; font-size:13px; color:#fff; background:var(--forest);
-    border:none; border-radius:10px; padding:9px 16px; cursor:pointer;
-  }
-  .settings-row button:hover{background:var(--forest-2);}
-  .settings-status{font-size:12px; margin-bottom:8px; display:flex; align-items:center; gap:6px;}
-  .settings-status.on{color:var(--open);}
-  .settings-status.off{color:var(--ink-faint);}
-  .settings-note{font-size:11.5px; color:var(--ink-faint); line-height:1.7;}
-  .settings-note code{background:var(--forest-soft); color:var(--forest); padding:1px 6px; border-radius:5px; font-family:'JetBrains Mono', monospace;}
-
   /* ---------- Controls ---------- */
   .controls{display:flex; gap:14px; align-items:center; margin-bottom:18px; flex-wrap:wrap;}
   .search-wrap{
@@ -373,7 +345,6 @@
     .card-name{font-size:14px;}
     .stat-tile{padding:12px 16px; min-width:96px;}
     .ridge{display:none;}
-    .settings-toggle{margin-left:0;}
   }
   @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
 </style>
@@ -424,23 +395,6 @@
           지역
         </span>
         <select class="region-select" id="regionSelect"></select>
-      </div>
-      <button class="settings-toggle" id="settingsToggle" type="button">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        실시간 연동 설정
-      </button>
-    </div>
-
-    <div class="settings-panel" id="settingsPanel">
-      <div class="settings-status off" id="settingsStatus">⚪ 미설정 — 예시 데이터만 표시됩니다</div>
-      <label for="workerUrlInput">Worker 주소 (Cloudflare Worker 배포 후 나오는 주소)</label>
-      <div class="settings-row">
-        <input type="text" id="workerUrlInput" placeholder="https://marathon-schedule-live.내계정.workers.dev">
-        <button id="saveWorkerBtn" type="button">저장하고 불러오기</button>
-      </div>
-      <div class="settings-note">
-        <code>worker-marathon-schedule/</code> 폴더를 <code>wrangler deploy</code>로 배포하면 나오는 주소를 여기에 붙여넣으세요.
-        비워두면 강원 지역 예시 데이터만 보여줍니다. 이 값은 이 브라우저에만 저장됩니다.
       </div>
     </div>
   </div>
@@ -568,7 +522,7 @@
   // 나옴을 실제 사이트에서 확인함) Worker가 아니라 여기서 지역별로 나눠 호출한 뒤 합친다.
   const REAL_REGIONS = REGIONS.map(r => r.key).filter(k => k !== "all");
 
-  // 강원 지역 오프라인 예시 데이터 (Worker 미설정 시 강원 선택하면 이걸 보여줌)
+  // 강원 지역 오프라인 예시 데이터 (Worker 호출이 실패했을 때 강원만 이 데이터로 대체해서 보여줌)
   const FALLBACK_GANGWON = [
     { name:"커피 빵빵런2026", date:"2026-05-09", day:"토", location:"강릉 경포호수광장", distances:["10km","5km"], status:"open", type:"road", region:"강원" },
     { name:"2026 옥스팜 트레일워커", date:"2026-05-16", day:"토", location:"인제 정중앙휴게소", distances:["100km","50km","25km"], status:"open", type:"trail", region:"강원" },
@@ -586,13 +540,14 @@
   ];
 
   const MONTH_KO = ["","1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
-  const WORKER_KEY = "marathonScheduleWorkerUrl";
   const FAV_KEY = "marathonScheduleFavorites";       // 찜한 대회 (이 브라우저에만 저장)
   const RECORDS_KEY = "marathonScheduleRecords";     // 완주 기록 (이 브라우저에만 저장)
   const FILTERS_KEY = "marathonScheduleFilters";     // 마지막에 쓰던 필터 기억
+  // 이 사이트가 항상 사용하는 Worker 주소. 방문자가 따로 설정할 수 있는 UI는 없다 —
+  // 다른 Worker로 바꾸려면 이 값을 코드에서 직접 수정해야 한다.
+  const workerBase = "https://marathon-schedule-live.shw892.workers.dev";
 
   let currentRegion = "강원";
-  let workerBase = (localStorage.getItem(WORKER_KEY) || "").trim().replace(/\/+$/,"");
 
   let events = [];
   let loading = false;
@@ -685,31 +640,6 @@
       if (val === "all" || REGION_NAME[val]) currentRegion = val;
     }
   }
-
-  // ---------- Settings panel ----------
-  const settingsPanel = document.getElementById("settingsPanel");
-  document.getElementById("settingsToggle").addEventListener("click", () => {
-    settingsPanel.classList.toggle("open");
-  });
-  document.getElementById("workerUrlInput").value = workerBase;
-  updateSettingsStatus();
-  function updateSettingsStatus(){
-    const el = document.getElementById("settingsStatus");
-    if (workerBase){
-      el.className = "settings-status on";
-      el.textContent = `🟢 연동됨 — ${workerBase}`;
-    } else {
-      el.className = "settings-status off";
-      el.textContent = "⚪ 미설정 — 강원 지역만 예시 데이터로 표시됩니다";
-    }
-  }
-  document.getElementById("saveWorkerBtn").addEventListener("click", () => {
-    const val = document.getElementById("workerUrlInput").value.trim().replace(/\/+$/,"");
-    workerBase = val;
-    localStorage.setItem(WORKER_KEY, val);
-    updateSettingsStatus();
-    loadEvents();
-  });
 
   // ---------- Icons ----------
   const pinIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
@@ -824,22 +754,6 @@
     renderStatusArea();
     renderSkeleton();
 
-    if (!workerBase){
-      if (currentRegion === "강원"){
-        events = FALLBACK_GANGWON.map(normalizeEvent);
-        usingFallback = true;
-        fetchedAt = null;
-      } else {
-        events = [];
-        usingFallback = false;
-        fetchedAt = null;
-      }
-      loading = false;
-      renderStatusArea();
-      renderAll();
-      return;
-    }
-
     try {
       if (currentRegion === "all"){
         const { events: merged, failCount, total } = await fetchAllRegions(false);
@@ -869,7 +783,6 @@
   }
 
   async function forceRefresh(){
-    if (!workerBase) { loadEvents(); return; }
     const btn = document.getElementById("refreshBtn");
     btn.classList.add("spinning");
     const myToken = ++reqToken;
@@ -927,19 +840,10 @@
       banner.innerHTML = "";
       return;
     }
-    if (!workerBase && currentRegion !== "강원"){
-      banner.innerHTML = `<div class="banner warn"><div class="banner-label">NOTICE</div><div>
-        <b>${REGION_NAME[currentRegion]||"이 지역"}은 실시간 연동이 필요합니다.</b><br>
-        Worker 주소를 설정하지 않으면 강원 지역 예시 데이터만 볼 수 있어요. 위 "실시간 연동 설정"에서 Worker 주소를 등록해주세요.
-      </div></div>`;
-    } else if (!workerBase && currentRegion === "강원"){
-      banner.innerHTML = `<div class="banner warn"><div class="banner-label">NOTICE</div><div>
-        <b>예시 데이터를 보고 있습니다.</b> 실시간 최신 정보를 보려면 "실시간 연동 설정"에서 Worker 주소를 등록해주세요.
-      </div></div>`;
-    } else if (loadError){
+    if (loadError){
       banner.innerHTML = `<div class="banner error"><div class="banner-label">ERROR</div><div>
         <b>실시간 데이터를 가져오지 못했습니다.</b> (${loadError})<br>
-        ${usingFallback ? "대신 강원 지역 예시 데이터를 보여드리고 있어요." : "Worker 주소가 올바른지, 배포가 정상인지 확인해주세요."}
+        ${usingFallback ? "대신 강원 지역 예시 데이터를 보여드리고 있어요." : "잠시 후 다시 시도해주세요."}
         <div class="banner-actions"><button id="retryBtn" type="button">다시 시도</button></div>
       </div></div>`;
       const retryBtn = document.getElementById("retryBtn");
@@ -1144,13 +1048,7 @@
 
     const emptyEl = document.getElementById("emptyState");
     const emptyMsg = document.getElementById("emptyMsg");
-    if (events.length === 0){
-      emptyMsg.textContent = (!workerBase && currentRegion !== "강원")
-        ? "이 지역은 실시간 연동이 필요합니다. 위에서 Worker 주소를 등록해보세요."
-        : "다른 필터를 선택하거나 검색어를 바꿔보세요.";
-    } else {
-      emptyMsg.textContent = "다른 필터를 선택하거나 검색어를 바꿔보세요.";
-    }
+    emptyMsg.textContent = "다른 필터를 선택하거나 검색어를 바꿔보세요.";
     emptyEl.style.display = list.length === 0 ? "block" : "none";
     root.style.display = list.length === 0 ? "none" : "block";
     document.getElementById("countLine").textContent = `총 ${list.length}개 대회`;
@@ -1300,7 +1198,7 @@
     btn.classList.remove("show");
     searchLink.classList.remove("demoted");
     checking.classList.remove("show");
-    if (!workerBase || !ev.date) return;
+    if (!ev.date) return;
 
     const cacheKey = favKeyFor(ev);
     let result = regLinkCache[cacheKey];
