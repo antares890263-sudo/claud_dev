@@ -186,7 +186,12 @@ function normalizeDate(raw) {
 
 function dowFor(dateStr) {
   if (!dateStr) return null;
-  const d = new Date(`${dateStr}T00:00:00+09:00`);
+  // "YYYY-MM-DD"를 그 날짜 자체의 UTC 자정으로 해석해서 요일을 구한다. 예전엔
+  // "+09:00"(한국시간 자정)을 붙였는데, 그러면 UTC로 변환하면서 하루 전날로
+  // 밀려버려서(예: 9/12 00:00 KST = 9/11 15:00 UTC) getUTCDay()가 하루 전 요일을
+  // 돌려주는 버그가 있었다(9/12 토요일인데 금요일로 표시됨). 요일은 시간대와 무관한
+  // 달력상의 성질이므로 애초에 시간대 변환을 하지 말아야 한다.
+  const d = new Date(`${dateStr}T00:00:00Z`);
   if (isNaN(d.getTime())) return null;
   return DOW[d.getUTCDay()];
 }
