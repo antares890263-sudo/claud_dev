@@ -549,7 +549,6 @@ const MARATHONGO_ORIGIN = "https://marathongo.co.kr";
 const MARATHONGO_LIST_URL = `${MARATHONGO_ORIGIN}/raceSchedule/domestic`;
 const MARATHONGO_LIST_CACHE_TTL_SECONDS = 14400; // 4시간 — 목록 자체는 자주 안 바뀜
 
-const DIST_CHIP_RE = /\d+(?:\.\d+)?\s*(?:km|k)(?:-[A-Za-z0-9]+)?[가-힣]*/gi;
 // 집결 시간 표기가 "16:30"처럼 숫자거나 "오전 10시"처럼 한글일 수 있어 둘 다 잡는다.
 const TIME_BEFORE_GATHER_RE = /(\d{1,2}:\d{2}|\d{1,2}\s*시|오전\s*\d{1,2}\s*시?|오후\s*\d{1,2}\s*시?)\s*집결/;
 
@@ -581,6 +580,13 @@ function namesLikelyMatch(a, b) {
  * 접수상태(+정원마감 배지) → 접수기간(YYYY.MM.DD~YYYY.MM.DD) → 주최" 순서로 나타난다(데스크톱/
  * 모바일 두 벌의 중복 카드는 slug로 제거). 날짜 배지엔 연도가 없고 연도는 그 뒤 지역/장소/시간
  * 블록 끝에 별도로 나와서, 월/일 + 그 연도를 합쳐야 완전한 날짜가 나온다.
+ *
+ * 실제 배포 후 확인된 두 가지를 반영했다: (1) 필드 사이에 "강원 | 강원도 양양군 웰컴센터 | ..."
+ * 처럼 "|" 문자가 그대로 끼어 있어서 걷어내지 않으면 장소 등에 "| 태백 소원지 오토캠핑장 |"처럼
+ * 찌꺼기가 남는다. (2) 거리 칩이 "풀코스"뿐 아니라 "코스"가 안 붙은 "풀" 단독으로도 나오는데,
+ * 이걸 이름 텍스트 전체에서 검색해 지우면 오탐 위험이 있어서, 대신 대회명 앞에서부터 칩 패턴이
+ * 매칭되는 동안만 순서대로 하나씩 떼어내는 방식(칩은 항상 이름보다 먼저 나온다는 카드 순서를
+ * 이용)으로 바꿨다.
  */
 function extractMarathonGoRaces(html) {
   const results = [];
@@ -592,8 +598,12 @@ function extractMarathonGoRaces(html) {
     if (seen.has(slug)) continue; // 데스크톱/모바일 중복 카드 스킵
     const idx = m.index;
     const winStart = Math.max(0, idx - 200);
-    const winEnd = Math.min(html.length, idx + 2400);
-    const windowText = stripHtml(html.slice(winStart, winEnd));
+    const winEnd = Math.min(html.length, idx + 2800);
+    // 실제 페이지는 "강원 | 강원도 양양군 웰컴센터 | 오전 10시 집결 | 2026"처럼 필드 사이에
+    // "|" 문자를 직접 넣어서 보여준다 — 공백으로 바꿔 이후 정규식 처리에서 필드 경계에 낀
+    // 찌꺼기 문자로 남지 않게 한다(장소 필드 앞뒤에 "| 태백 소원지 오토캠핑장 |"처럼 그대로
+    // 남는 게 실제 배포에서 확인된 버그였다).
+    const windowText = stripHtml(html.slice(winStart, winEnd)).replace(/[|｜]/g, " ");
 
     const dateMatch = windowText.match(/(\d{1,2})월\s*(\d{1,2})일/);
     if (!dateMatch) continue;
@@ -610,25 +620,37 @@ function extractMarathonGoRaces(html) {
     }
     if (regionIdx === -1) continue;
 
-    const nameZone = windowText.slice(afterDate, regionIdx);
-    const distSet = new Set(
-      (nameZone.match(DIST_CHIP_RE) || []).map((d) =>
-        d.replace(/\s+/g, "").replace(/^(\d+(?:\.\d+)?)k$/i, "$1km")
-      )
-    );
-    if (/하프/.test(nameZone)) distSet.add("하프");
-    if (/풀\s*코스/.test(nameZone)) distSet.add("풀코스");
-
-    const name = nameZone
-      .replace(/^[()토일월화수목금\s]+/, "")
-      .replace(DIST_CHIP_RE, "")
-      .replace(/걷기|하프|풀\s*코스|정원\s*마감/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+    // 대회명 앞의 거리 칩들을 뽑는다. 정규식을 대회명 텍스트 전체에다 대고 찾으면(구 버전)
+    // "풀"처럼 뒤에 "코스"가 안 붙는 단독 칩이 이름 뒤(예: 지역명이 아니라 이름 자체)에도
+    // 우연히 나타날 수 있어 오탐 위험이 있다 — 그래서 실제 카드 순서(칩들이 항상 이름보다
+    // 먼저 나옴)를 이용해 맨 앞에서부터 칩 패턴이 매칭되는 동안만 하나씩 떼어내고, 더 이상
+    // 안 떼어지는 지점부터를 대회명으로 본다.
+    let rest = windowText.slice(afterDate, regionIdx).replace(/^[()토일월화수목금\s]+/, "");
+    const distSet = new Set();
+    const numChipRe = /^\s*(\d+(?:\.\d+)?)\s*(?:km|k)(?:-[A-Za-z0-9]+)?(걷기)?\s*/i;
+    const wordChipRe = /^\s*(풀\s*코스|풀|하프|걷기)\s*/;
+    for (;;) {
+      const numChip = rest.match(numChipRe);
+      if (numChip) {
+        distSet.add(`${numChip[1]}km${numChip[2] || ""}`);
+        rest = rest.slice(numChip[0].length);
+        continue;
+      }
+      const wordChip = rest.match(wordChipRe);
+      if (wordChip) {
+        const w = wordChip[1].replace(/\s+/g, "");
+        if (w !== "걷기") distSet.add(w === "풀코스" ? "풀코스" : w);
+        rest = rest.slice(wordChip[0].length);
+        continue;
+      }
+      break;
+    }
+    if (/정원\s*마감/.test(rest)) rest = rest.replace(/정원\s*마감/g, "");
+    const name = rest.replace(/\s{2,}/g, " ").trim();
     if (name.length < 2) continue; // 대회명 안에 지역명이 섞여 너무 짧게 잘린 경우 등 — 이 항목은 포기
 
     const regionEnd = regionIdx + region.length;
-    const zoneAfterRegion = windowText.slice(regionEnd, Math.min(windowText.length, regionEnd + 300));
+    const zoneAfterRegion = windowText.slice(regionEnd, Math.min(windowText.length, regionEnd + 500));
     const statusMatch = zoneAfterRegion.match(/접수중|접수마감|접수전/);
     const statusIdx = statusMatch ? statusMatch.index : -1;
     const beforeStatus = statusIdx === -1 ? zoneAfterRegion : zoneAfterRegion.slice(0, statusIdx);
@@ -650,7 +672,7 @@ function extractMarathonGoRaces(html) {
       else if (statusMatch[0] === "접수전") status = "pre_open";
       else status = "closed";
     }
-    const afterStatusZone = statusIdx === -1 ? "" : zoneAfterRegion.slice(statusIdx, statusIdx + 200);
+    const afterStatusZone = statusIdx === -1 ? "" : zoneAfterRegion.slice(statusIdx, statusIdx + 350);
     if (/정원\s*마감/.test(beforeStatus) || /정원\s*마감/.test(afterStatusZone)) status = "closed";
 
     let deadline = null;
