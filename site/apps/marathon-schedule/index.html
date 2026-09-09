@@ -278,6 +278,14 @@
   .modal-weather.show{display:flex;}
   .modal-weather b{font-weight:700;}
 
+  .modal-btn.reglink{display:none; background:var(--forest); color:#fff;}
+  .modal-btn.reglink.show{display:inline-flex;}
+  .modal-btn.reglink:hover{background:var(--forest-2);}
+  .modal-btn.primary.demoted{background:var(--card-2); color:var(--ink-soft); border:1px solid var(--line);}
+  .modal-btn.primary.demoted:hover{border-color:var(--trail); color:var(--trail-2);}
+  .reglink-checking{font-size:11.5px; color:var(--ink-faint); margin-top:8px; display:none;}
+  .reglink-checking.show{display:block;}
+
   .my-records{margin-top:36px; border-top:1px solid var(--line); padding-top:20px;}
   .my-records-head{display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;}
   .my-records-head .m-num{font-family:'Black Han Sans', sans-serif; font-size:18px; color:var(--forest);}
@@ -478,11 +486,16 @@
     <div class="modal-weather" id="modalWeather"></div>
     <div class="modal-fields" id="modalFields"></div>
     <div class="modal-actions">
+      <a class="modal-btn reglink" id="modalRegLink" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        실제 접수 사이트로 이동
+      </a>
       <a class="modal-btn primary" id="modalSearchLink" target="_blank" rel="noopener">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         대회 정보 검색해서 확인하기
       </a>
     </div>
+    <div class="reglink-checking" id="regLinkChecking">🔎 실제 접수 링크 확인 중...</div>
     <div class="modal-actions" style="margin-top:8px;">
       <button class="modal-btn secondary" id="modalCalBtn" type="button">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
@@ -991,6 +1004,7 @@
   }
 
   function getFiltered(){
+    const today = todayISO();
     let list = events.filter(ev => {
       const haystack = (ev.name + " " + ev.location + " " + ev.region).toLowerCase();
       const matchesSearch = !searchTerm || haystack.includes(searchTerm.toLowerCase());
@@ -999,7 +1013,9 @@
       const matchesFav = !favoritesOnly || favorites.has(favKeyFor(ev));
       const diff = ev.deadline ? dday(ev.deadline) : null;
       const matchesUrgent = !urgentOnly || (diff !== null && diff >= 0 && diff <= 3);
-      return matchesSearch && matchesStatus && matchesType && matchesFav && matchesUrgent;
+      // 이미 지난(대회일이 오늘보다 이전인) 대회는 목록에서 뺀다 — 오늘 열리는 대회는 그대로 보여준다.
+      const isUpcoming = !ev.date || ev.date >= today;
+      return matchesSearch && matchesStatus && matchesType && matchesFav && matchesUrgent && isUpcoming;
     });
 
     if (sortBy === "name") list.sort((a,b) => a.name.localeCompare(b.name, "ko"));
@@ -1036,9 +1052,11 @@
       ? "전국에서 열리는 로드·트레일 대회를 한 번에 모아 날짜순으로 보여줍니다."
       : `${currentRegion} 지역에서 열리는 로드·트레일 대회를 날짜순으로 모았습니다.`;
 
-    document.getElementById("statTotal").textContent = loading ? "–" : events.length;
-    document.getElementById("statOpen").textContent = loading ? "–" : events.filter(e=>e.status==="open").length;
-    document.getElementById("statTrail").textContent = loading ? "–" : events.filter(e=>e.type==="trail").length;
+    // 상단 통계 배지도 목록과 마찬가지로 이미 지난 대회는 빼고 센다.
+    const upcomingEvents = events.filter(e => !e.date || e.date >= todayISO());
+    document.getElementById("statTotal").textContent = loading ? "–" : upcomingEvents.length;
+    document.getElementById("statOpen").textContent = loading ? "–" : upcomingEvents.filter(e=>e.status==="open").length;
+    document.getElementById("statTrail").textContent = loading ? "–" : upcomingEvents.filter(e=>e.type==="trail").length;
 
     renderTabs();
 
@@ -1187,6 +1205,41 @@
     } catch (e) { /* 무시 */ }
   }
 
+  // ---------- 실제 접수 사이트 링크 (Worker 연동 시에만, 이름+날짜로 자동 매칭된 결과) ----------
+  const regLinkCache = {}; // `${name}__${date}` -> 이번 세션 동안 재조회 방지
+  async function updateModalRegLink(ev, myModalToken){
+    const btn = document.getElementById("modalRegLink");
+    const searchLink = document.getElementById("modalSearchLink");
+    const checking = document.getElementById("regLinkChecking");
+    btn.classList.remove("show");
+    searchLink.classList.remove("demoted");
+    checking.classList.remove("show");
+    if (!workerBase || !ev.date) return;
+
+    const cacheKey = favKeyFor(ev);
+    let result = regLinkCache[cacheKey];
+    if (result === undefined){
+      checking.classList.add("show");
+      try {
+        const res = await fetch(`${workerBase}/api/reglink?name=${encodeURIComponent(ev.name)}&date=${encodeURIComponent(ev.date)}`);
+        result = res.ok ? await res.json() : { found: false };
+      } catch (e) {
+        result = { found: false };
+      }
+      regLinkCache[cacheKey] = result;
+    }
+    if (myModalToken !== modalToken) return; // 그 사이 다른 대회 모달로 넘어갔으면 무시
+    checking.classList.remove("show");
+    if (result && result.found && result.url){
+      btn.href = result.url;
+      btn.classList.add("show");
+      searchLink.classList.add("demoted"); // 실제 링크가 있으니 검색 링크는 보조 수단으로 낮춘다
+      document.getElementById("modalNote").textContent =
+        "이름·날짜가 일치하는 대회를 찾아 자동으로 연결한 실제 접수 링크입니다. 자동 매칭이라 다른 " +
+        "대회로 잘못 연결될 수 있으니 결제 전 대회명을 꼭 확인하세요.";
+    }
+  }
+
   function refreshDoneBtn(ev){
     const btn = document.getElementById("modalDoneBtn");
     if (hasRecord(ev)){ btn.textContent = "완주 기록 삭제"; btn.classList.add("active"); }
@@ -1220,6 +1273,7 @@
     modalEvent = ev;
     const myModalToken = ++modalToken;
     updateModalWeather(ev, myModalToken);
+    updateModalRegLink(ev, myModalToken);
     refreshDoneBtn(ev);
 
     document.getElementById("modalBadge").className = `badge ${ev.status}`;
