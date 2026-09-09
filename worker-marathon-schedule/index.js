@@ -530,6 +530,218 @@ function mapRace(r, statusFromQuery) {
  * region이 항상 구체적인 지역명이라고 가정하고, "all"/빈 값 처리는 fetch 핸들러 쪽에서
  * 미리 걸러낸다(region_required 에러).
  */
+
+// ---------------------------------------------------------------------------
+// marathongo.co.kr (마라톤GO) — marathonmate.store에 없는 대회를 보충하는 2차 소스
+//
+// marathonmate.store 혼자서는 실제로 열리는 대회를 다 못 잡는다(예: "2026 양양 강변 전국
+// 마라톤"은 marathonmate.store 어디에도 없지만 실제로 열리는 대회이고 marathongo.co.kr에는
+// 있다). 그래서 지역별 조회마다 marathongo.co.kr의 국내 대회 전체 목록도 같이 가져와서,
+// marathonmate.store 목록에 이름+날짜로 없는 대회만 보충해서 합친다. marathonmate.store
+// 데이터가 있으면 항상 그게 우선이고, marathongo.co.kr은 "구멍 메우기"용이다.
+//
+// marathongo.co.kr은 페이지네이션 없이 국내 대회 전체가 한 페이지(/raceSchedule/domestic)에
+// 실려 있어서, 지역별로 나눠 요청할 필요 없이 한 번만 가져오면 된다 — 그 결과를 몇 시간
+// 캐시해 재사용하므로 지역별 조회가 늘어나도 실제 업스트림 요청은 거의 늘지 않는다.
+// ---------------------------------------------------------------------------
+
+const MARATHONGO_ORIGIN = "https://marathongo.co.kr";
+const MARATHONGO_LIST_URL = `${MARATHONGO_ORIGIN}/raceSchedule/domestic`;
+const MARATHONGO_LIST_CACHE_TTL_SECONDS = 14400; // 4시간 — 목록 자체는 자주 안 바뀜
+
+const DIST_CHIP_RE = /\d+(?:\.\d+)?\s*(?:km|k)(?:-[A-Za-z0-9]+)?[가-힣]*/gi;
+// 집결 시간 표기가 "16:30"처럼 숫자거나 "오전 10시"처럼 한글일 수 있어 둘 다 잡는다.
+const TIME_BEFORE_GATHER_RE = /(\d{1,2}:\d{2}|\d{1,2}\s*시|오전\s*\d{1,2}\s*시?|오후\s*\d{1,2}\s*시?)\s*집결/;
+
+/** 대회명 비교용 정규화: 순번("제12회"), 연도, 공백/구두점을 제거해 사이트 간 표기 차이를 흡수한다. */
+function normalizeNameForMatch(name) {
+  if (!name) return "";
+  return String(name)
+    .replace(/제\s*\d+\s*회/g, "")
+    .replace(/\d{4}\s*년?/g, "")
+    .replace(/[\s\-_.,()·'"~!?/]/g, "")
+    .toLowerCase();
+}
+
+/** 정규화한 두 이름이 같거나, 한쪽이 다른 쪽에 완전히 포함되면 같은 대회로 본다. */
+function namesLikelyMatch(a, b) {
+  const na = normalizeNameForMatch(a);
+  const nb = normalizeNameForMatch(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length <= nb.length ? nb : na;
+  return shorter.length >= 4 && longer.includes(shorter);
+}
+
+/**
+ * marathongo.co.kr 목록 페이지 HTML에서 대회 목록을 뽑는다. 클래스명 대신(=마크업이 바뀌어도
+ * 비교적 안 깨지도록) 카드 링크(`/raceDetail/domestic/<slug>`)가 등장하는 지점 주변 텍스트만
+ * 본다. 카드 안 텍스트는 항상 "날짜 → 거리칩들 → 대회명 → 지역 → 장소 → 집결시간 → 연도 →
+ * 접수상태(+정원마감 배지) → 접수기간(YYYY.MM.DD~YYYY.MM.DD) → 주최" 순서로 나타난다(데스크톱/
+ * 모바일 두 벌의 중복 카드는 slug로 제거). 날짜 배지엔 연도가 없고 연도는 그 뒤 지역/장소/시간
+ * 블록 끝에 별도로 나와서, 월/일 + 그 연도를 합쳐야 완전한 날짜가 나온다.
+ */
+function extractMarathonGoRaces(html) {
+  const results = [];
+  const seen = new Set();
+  const linkRe = /href="(\/raceDetail\/domestic\/[^"?#]+)"/g;
+  let m;
+  while ((m = linkRe.exec(html))) {
+    const slug = m[1];
+    if (seen.has(slug)) continue; // 데스크톱/모바일 중복 카드 스킵
+    const idx = m.index;
+    const winStart = Math.max(0, idx - 200);
+    const winEnd = Math.min(html.length, idx + 2400);
+    const windowText = stripHtml(html.slice(winStart, winEnd));
+
+    const dateMatch = windowText.match(/(\d{1,2})월\s*(\d{1,2})일/);
+    if (!dateMatch) continue;
+    const month = dateMatch[1].padStart(2, "0");
+    const day = dateMatch[2].padStart(2, "0");
+    const afterDate = dateMatch.index + dateMatch[0].length;
+
+    // 대회명 뒤에 오는 지역명이 처음 등장하는 위치를 찾는다("전국"/"기타"는 흔한 일반 단어라 제외).
+    let regionIdx = -1, region = null;
+    for (const r of REGIONS) {
+      if (r === "전국" || r === "기타") continue;
+      const ri = windowText.indexOf(r, afterDate);
+      if (ri !== -1 && (regionIdx === -1 || ri < regionIdx)) { region = r; regionIdx = ri; }
+    }
+    if (regionIdx === -1) continue;
+
+    const nameZone = windowText.slice(afterDate, regionIdx);
+    const distSet = new Set(
+      (nameZone.match(DIST_CHIP_RE) || []).map((d) =>
+        d.replace(/\s+/g, "").replace(/^(\d+(?:\.\d+)?)k$/i, "$1km")
+      )
+    );
+    if (/하프/.test(nameZone)) distSet.add("하프");
+    if (/풀\s*코스/.test(nameZone)) distSet.add("풀코스");
+
+    const name = nameZone
+      .replace(/^[()토일월화수목금\s]+/, "")
+      .replace(DIST_CHIP_RE, "")
+      .replace(/걷기|하프|풀\s*코스|정원\s*마감/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (name.length < 2) continue; // 대회명 안에 지역명이 섞여 너무 짧게 잘린 경우 등 — 이 항목은 포기
+
+    const regionEnd = regionIdx + region.length;
+    const zoneAfterRegion = windowText.slice(regionEnd, Math.min(windowText.length, regionEnd + 300));
+    const statusMatch = zoneAfterRegion.match(/접수중|접수마감|접수전/);
+    const statusIdx = statusMatch ? statusMatch.index : -1;
+    const beforeStatus = statusIdx === -1 ? zoneAfterRegion : zoneAfterRegion.slice(0, statusIdx);
+
+    const timeMatch = beforeStatus.match(TIME_BEFORE_GATHER_RE);
+    const location =
+      (timeMatch ? beforeStatus.slice(0, timeMatch.index) : beforeStatus)
+        .replace(/\b20\d{2}\b/g, "")
+        .replace(/\s{2,}/g, " ")
+        .trim() || null;
+
+    const yearMatches = beforeStatus.match(/\b20\d{2}\b/g);
+    if (!yearMatches) continue;
+    const year = yearMatches[yearMatches.length - 1];
+
+    let status = "unknown";
+    if (statusMatch) {
+      if (statusMatch[0] === "접수중") status = "open";
+      else if (statusMatch[0] === "접수전") status = "pre_open";
+      else status = "closed";
+    }
+    const afterStatusZone = statusIdx === -1 ? "" : zoneAfterRegion.slice(statusIdx, statusIdx + 200);
+    if (/정원\s*마감/.test(beforeStatus) || /정원\s*마감/.test(afterStatusZone)) status = "closed";
+
+    let deadline = null;
+    const periodMatch = afterStatusZone.match(/\d{4}\.\d{2}\.\d{2}\s*~\s*(\d{4})\.(\d{2})\.(\d{2})/);
+    if (periodMatch) deadline = `${periodMatch[1]}-${periodMatch[2]}-${periodMatch[3]}`;
+
+    seen.add(slug);
+    results.push({
+      name,
+      date: `${year}-${month}-${day}`,
+      slug,
+      region,
+      location,
+      distances: Array.from(distSet),
+      status,
+      deadline,
+    });
+  }
+  return results;
+}
+
+/** marathongo.co.kr 국내 대회 전체 목록을 가져와 파싱한다. 몇 시간 캐시해 재사용한다. */
+async function fetchMarathonGoList(ctx) {
+  const cacheKey = new Request("https://cache.internal/marathongo-list");
+  const cache = caches.default;
+  try {
+    const cached = await cache.match(cacheKey);
+    if (cached) return await cached.json();
+  } catch (e) {
+    // 캐시 읽기 실패 시 그냥 새로 가져온다
+  }
+
+  const res = await fetch(MARATHONGO_LIST_URL, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; MarathonScheduleBot/1.0; personal aggregator)",
+      "Accept-Language": "ko-KR,ko;q=0.9",
+    },
+  });
+  const html = await res.text();
+  const list = extractMarathonGoRaces(html);
+
+  const cacheResponse = new Response(JSON.stringify(list), {
+    headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${MARATHONGO_LIST_CACHE_TTL_SECONDS}` },
+  });
+  ctx.waitUntil(cache.put(cacheKey, cacheResponse));
+  return list;
+}
+
+/**
+ * marathongo.co.kr 항목 하나를 앱이 쓰는 이벤트 형태로 변환한다. url은 marathongo.co.kr의
+ * 대회 상세페이지로 연결한다(marathonmate.store 대회의 url 필드와 같은 역할).
+ */
+function mapMarathonGoRace(r) {
+  const isTrail = /트레일|trail/i.test(r.name) || (r.location && /트레일|trail/i.test(r.location));
+  return {
+    name: r.name,
+    date: r.date,
+    day: dowFor(r.date),
+    location: r.location,
+    distances: r.distances,
+    status: r.status,
+    deadline: r.deadline,
+    region: r.region,
+    type: isTrail ? "trail" : "road",
+    url: `${MARATHONGO_ORIGIN}${r.slug}`,
+    source: "marathongo",
+  };
+}
+
+/**
+ * marathonmate.store에서 뽑은 events(해당 region)에, 거기 없는 marathongo.co.kr 대회만
+ * 이름+날짜로 대조해 보충한다. marathonmate.store 데이터가 항상 우선이며, 이 함수는 실패해도
+ * (marathongo.co.kr 요청 실패 등) 절대 예외를 던지지 않고 원본 events를 그대로 돌려준다 —
+ * 이 기능이 죽어도 기존 marathonmate.store 목록 조회에는 영향이 없어야 한다.
+ */
+async function supplementWithMarathonGo(events, region, ctx) {
+  try {
+    const list = await fetchMarathonGoList(ctx);
+    const candidates = list.filter((r) => r.region === region);
+    const added = [];
+    for (const c of candidates) {
+      const alreadyHave = events.some((e) => e.date === c.date && namesLikelyMatch(e.name, c.name));
+      if (alreadyHave) continue;
+      added.push(mapMarathonGoRace(c));
+    }
+    return { events: events.concat(added), addedCount: added.length };
+  } catch (e) {
+    return { events, addedCount: 0, error: String(e) };
+  }
+}
+
 function buildUpstreamTargets(region) {
   const regionQ = `region=${encodeURIComponent(region)}`;
   return [
@@ -601,6 +813,11 @@ export {
   normalizeDistanceLabel,
   mapRace,
   buildUpstreamTargets,
+  normalizeNameForMatch,
+  namesLikelyMatch,
+  extractMarathonGoRaces,
+  mapMarathonGoRace,
+  supplementWithMarathonGo,
 };
 
 export default {
@@ -773,7 +990,10 @@ export default {
 
     // races/jsonld 소스는 이미 정확히 필터링된 상태로 오지만(특히 races는 업스트림이
     // region으로 걸러줌), 혹시 모를 불일치를 방지하기 위해 한 번 더 확인한다.
-    const events = allEvents.filter((e) => !e.region || e.region === region);
+    const mateEvents = allEvents.filter((e) => !e.region || e.region === region);
+
+    // marathonmate.store에 없는 대회를 marathongo.co.kr로 보충한다(실패해도 mateEvents 그대로 유지됨).
+    const { events, addedCount: marathongoAdded } = await supplementWithMarathonGo(mateEvents, region, ctx);
 
     const bodyObj = {
       region,
@@ -785,6 +1005,7 @@ export default {
         totalEventsFound: allEvents.length,
         eventCount: events.length,
         fetchedStatuses: fetchResults.map((r) => ({ status: r.status, ok: r.ok })),
+        marathongoAdded,
         ...(aiDebug || {}),
       },
     };
