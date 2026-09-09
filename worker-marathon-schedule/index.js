@@ -19,10 +19,15 @@
  *   wrangler deploy
  *   (또는 README.md의 브라우저 전용 배포 방법 A/B 참고)
  *
- * 요청 예:
- *   GET https://<주소>.workers.dev/api/schedule?region=all     (전국 통합)
+ * 요청 예 (region은 항상 구체적인 지역명이어야 한다 — marathonmate.store엔 "전국 통합"
+ * 개념이 없어서 region을 생략하면 업스트림이 서울 지역 기본값만 내려주기 때문):
  *   GET https://<주소>.workers.dev/api/schedule?region=강원     (지역별)
  *   GET https://<주소>.workers.dev/api/schedule?region=강원&force=1   (캐시 무시하고 새로 가져오기)
+ *   GET https://<주소>.workers.dev/api/schedule?region=전국     ("전국" 자체도 하나의 지역 카테고리다 —
+ *                                                              특정 지역에 안 묶인 전국구 대회들)
+ * "전체(모든 지역 합치기)"는 이 Worker가 아니라 호출하는 쪽(앱)이 지역별로 나눠서 호출한 뒤
+ * 합치는 방식으로 구현한다 — Cloudflare Workers 무료 플랜의 요청당 subrequest 50개 / CPU 10ms
+ * 한도 안에서 19개 지역을 한 번에 서버에서 다 처리하는 건 안전하지 않기 때문이다.
  */
 
 // 실제 배포한 사이트 주소(예: https://your-username.github.io)를 넣어두면
@@ -506,20 +511,20 @@ function mapRace(r, statusFromQuery) {
 }
 
 /**
- * 요청받은 region(또는 "all")에 대해, marathonmate.store가 실제로 쓰는 3가지
- * 접수상태 필터(접수전/접수중/접수마감)에 해당하는 업스트림 URL 목록을 만든다.
- * region이 없으면(=?region= 파라미터를 아예 안 넣으면) 전국 통합 목록이 나온다.
+ * 요청받은(반드시 실제 지역명이어야 함) region에 대해, marathonmate.store가 실제로 쓰는
+ * 3가지 접수상태 필터(접수전/접수중/접수마감)에 해당하는 업스트림 URL 목록을 만든다.
+ *
+ * 중요: marathonmate.store에는 "전국 통합" 개념이 없다. ?region= 파라미터를 아예 안 넣으면
+ * 업스트림은 그냥 서울 지역 기본값을 내려준다(실제 페이지로 확인함) — 그래서 이 함수는
+ * region이 항상 구체적인 지역명이라고 가정하고, "all"/빈 값 처리는 fetch 핸들러 쪽에서
+ * 미리 걸러낸다(region_required 에러).
  */
 function buildUpstreamTargets(region) {
-  const regionQ = region && region !== "all" ? `region=${encodeURIComponent(region)}` : "";
-  const withRegion = (extra) => {
-    const parts = [regionQ, extra].filter(Boolean);
-    return parts.length ? `${UPSTREAM}?${parts.join("&")}` : UPSTREAM;
-  };
+  const regionQ = `region=${encodeURIComponent(region)}`;
   return [
-    { status: "open", url: withRegion("") },
-    { status: "pre_open", url: withRegion("status=pre_open") },
-    { status: "closed", url: withRegion("status=closed") },
+    { status: "open", region, url: `${UPSTREAM}?${regionQ}` },
+    { status: "pre_open", region, url: `${UPSTREAM}?${regionQ}&status=pre_open` },
+    { status: "closed", region, url: `${UPSTREAM}?${regionQ}&status=closed` },
   ];
 }
 
@@ -597,13 +602,35 @@ export default {
     }
     if (url.pathname !== "/api/schedule") {
       return new Response(
-        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=all|<지역명>" }),
+        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타)" }),
         { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders(origin) } }
       );
     }
 
-    const region = (url.searchParams.get("region") || "all").trim();
+    const region = (url.searchParams.get("region") || "").trim();
     const forceRefresh = url.searchParams.get("force") === "1";
+
+    // marathonmate.store에는 "전국 통합(all)" 개념이 없다 — region 파라미터를 생략하면
+    // 업스트림이 그냥 서울 지역 기본값만 내려준다(실제 페이지로 확인함). 그래서 이 Worker는
+    // 반드시 구체적인 지역명을 요구한다. "전체" 보기는 앱이 REGIONS 전체를 지역별로 나눠
+    // 각각 이 API를 호출한 뒤 클라이언트에서 합치는 방식으로 구현한다(Cloudflare Workers
+    // 무료 플랜의 요청당 subrequest 50개 / CPU 10ms 한도 안에서 안전하게 동작하도록).
+    if (!region || region === "all") {
+      const body = {
+        region: region || "all",
+        fetchedAt: new Date().toISOString(),
+        events: [],
+        error: "region_required",
+        detail:
+          "marathonmate.store에는 '전국 통합' 개념이 없어서 region 파라미터 없이 요청하면 서울 지역 기본값만 내려옵니다. " +
+          "이 API는 반드시 구체적인 지역명(예: 강원, 서울, 전국, 기타)으로 호출해야 합니다. " +
+          "여러 지역을 합친 목록이 필요하면 호출하는 쪽에서 지역별로 나눠 호출한 뒤 합쳐주세요.",
+      };
+      return new Response(JSON.stringify(body), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+      });
+    }
 
     const cacheKeyUrl = new URL(request.url);
     cacheKeyUrl.searchParams.delete("force");
@@ -627,8 +654,7 @@ export default {
     // marathonmate.store는 접수전/접수중/접수마감 3개 상태를 별도 쿼리(?status=...)로만
     // 보여준다(기본값은 접수중). 그래서 완전한 목록을 얻으려면 3번 다 가져와야 한다.
     // region을 넣으면 업스트림이 이미 그 지역으로 정확히 필터링해서 내려주므로,
-    // 우리가 텍스트로 추측할 필요가 없다 (region=all이면 region 파라미터 없이 요청 —
-    // 이러면 업스트림이 전국 통합 목록을 내려준다).
+    // 우리가 텍스트로 추측할 필요가 없다. (region은 위에서 이미 실제 지역명임을 확인했다.)
     const targets = buildUpstreamTargets(region);
 
     let fetchResults;
@@ -735,9 +761,8 @@ export default {
     }
 
     // races/jsonld 소스는 이미 정확히 필터링된 상태로 오지만(특히 races는 업스트림이
-    // region으로 걸러줌), 혹시 모를 불일치를 방지하기 위해 region!=="all"이면 한 번 더 확인한다.
-    const events =
-      region === "all" ? allEvents : allEvents.filter((e) => !e.region || e.region === region);
+    // region으로 걸러줌), 혹시 모를 불일치를 방지하기 위해 한 번 더 확인한다.
+    const events = allEvents.filter((e) => !e.region || e.region === region);
 
     const bodyObj = {
       region,
