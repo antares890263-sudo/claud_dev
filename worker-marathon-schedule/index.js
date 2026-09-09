@@ -524,6 +524,172 @@ function mapRace(r, statusFromQuery) {
  * region이 항상 구체적인 지역명이라고 가정하고, "all"/빈 값 처리는 fetch 핸들러 쪽에서
  * 미리 걸러낸다(region_required 에러).
  */
+// ---------------------------------------------------------------------------
+// 실제 접수 사이트 링크 (marathongo.co.kr 교차 매칭)
+//
+// marathonmate.store 자체에는 접수 링크가 없다("접수 링크 없음 · 주최 공지 확인"). 그래서
+// 같은 대회를 다루는 다른 사이트인 marathongo.co.kr(마라톤GO)의 대회 상세페이지에서 실제
+// 접수 링크를 찾아 연결한다. marathonmate.store 목록과 이름+날짜로 매칭한다.
+//
+// 설계(무료 플랜 한도 고려): 이 조회는 앱이 대회 "전체 목록"을 불러올 때가 아니라, 사용자가
+// 특정 대회의 상세 모달을 열 때만(그 대회 하나에 대해서만) 호출된다 — /api/schedule처럼 전체
+// 지역을 한 번에 처리하지 않으므로 subrequest/CPU 부담이 훨씬 적다. 목록 페이지는 지역/접수
+// 상태로 나뉘지 않고 단일 페이지에 전체 대회가 실려 있어(marathonmate.store와 달리 페이지네이션
+// 없음) 한 번만 가져오면 되고, 그 결과를 몇 시간 캐시해 재사용한다.
+// ---------------------------------------------------------------------------
+
+const MARATHONGO_ORIGIN = "https://marathongo.co.kr";
+const MARATHONGO_LIST_URL = `${MARATHONGO_ORIGIN}/raceSchedule/domestic`;
+const MARATHONGO_LIST_CACHE_TTL_SECONDS = 14400; // 4시간 — 목록 자체는 자주 안 바뀜
+const REGLINK_CACHE_TTL_SECONDS = 43200; // 12시간 — 대회 하나당 결과 캐시
+
+const UPSTREAM_FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (compatible; MarathonScheduleBot/1.0; personal aggregator)",
+  "Accept-Language": "ko-KR,ko;q=0.9",
+};
+
+/** 대회명 비교용 정규화: 순번("제12회"), 연도, 공백/구두점을 제거해 표기 차이를 흡수한다. */
+function normalizeNameForMatch(name) {
+  if (!name) return "";
+  return String(name)
+    .replace(/제\s*\d+\s*회/g, "")
+    .replace(/\d{4}\s*년?/g, "")
+    .replace(/[\s\-_.,()·'"~!?/]/g, "")
+    .toLowerCase();
+}
+
+/** 정규화한 두 이름이 같거나, 한쪽이 다른 쪽에 완전히 포함되면 같은 대회로 본다. */
+function namesLikelyMatch(a, b) {
+  const na = normalizeNameForMatch(a);
+  const nb = normalizeNameForMatch(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length <= nb.length ? nb : na;
+  return shorter.length >= 4 && longer.includes(shorter);
+}
+
+/**
+ * marathongo.co.kr 목록 페이지(/raceSchedule/domestic) HTML에서 {name, date, slug, region} 목록을
+ * 뽑는다. 이 사이트는 마크업 class 이름에 기대지 않고(=바뀌어도 비교적 안 깨지도록) 카드 링크
+ * (`/raceDetail/domestic/<slug>`)가 등장하는 지점 주변 텍스트만 본다. 카드 안 텍스트는 항상
+ * "날짜 → 거리칩들 → 대회명 → 지역 → 장소 → 집결시간 → 연도 → 접수상태 → ..." 순서로 나타난다
+ * (데스크톱/모바일 두 벌의 중복 카드가 있어 slug로 중복 제거한다). 날짜 배지엔 연도가 없고,
+ * 연도는 그 뒤 "지역/장소/시간" 블록 끝에 별도로 나온다 — 그래서 월/일 + 그 연도를 합쳐야
+ * 완전한 날짜가 나온다.
+ */
+function extractMarathonGoRaces(html) {
+  const results = [];
+  const seen = new Set();
+  const linkRe = /href="(\/raceDetail\/domestic\/[^"?#]+)"/g;
+  let m;
+  while ((m = linkRe.exec(html))) {
+    const slug = m[1];
+    if (seen.has(slug)) continue; // 데스크톱/모바일 중복 카드 스킵
+    const idx = m.index;
+    const winStart = Math.max(0, idx - 200);
+    const winEnd = Math.min(html.length, idx + 2200);
+    const windowText = stripHtml(html.slice(winStart, winEnd));
+
+    const dateMatch = windowText.match(/(\d{1,2})월\s*(\d{1,2})일/);
+    if (!dateMatch) continue;
+    const month = dateMatch[1].padStart(2, "0");
+    const day = dateMatch[2].padStart(2, "0");
+    const afterDate = dateMatch.index + dateMatch[0].length;
+
+    // 대회명 뒤에 오는 지역명이 처음 등장하는 위치를 찾는다("전국"/"기타"는 흔한 일반 단어라 제외).
+    let regionIdx = -1, region = null;
+    for (const r of REGIONS) {
+      if (r === "전국" || r === "기타") continue;
+      const ri = windowText.indexOf(r, afterDate);
+      if (ri !== -1 && (regionIdx === -1 || ri < regionIdx)) { region = r; regionIdx = ri; }
+    }
+    if (regionIdx === -1) continue;
+
+    const name = windowText
+      .slice(afterDate, regionIdx)
+      .replace(/^[()토일월화수목금\s]+/, "")
+      .replace(/\d+(?:\.\d+)?\s*(?:km|k)\b/gi, "")
+      .replace(/걷기|하프|풀코스|정원\s*마감/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (name.length < 2) continue; // 대회명 안에 지역명이 섞여 있어 너무 짧게 잘린 경우 등 — 매칭 포기
+
+    const afterRegion = windowText.slice(regionIdx, Math.min(windowText.length, regionIdx + 260));
+    const statusIdx = afterRegion.search(/접수중|접수마감|접수전/);
+    const yearZone = statusIdx === -1 ? afterRegion : afterRegion.slice(0, statusIdx);
+    const yearMatches = yearZone.match(/\b20\d{2}\b/g);
+    if (!yearMatches) continue;
+    const year = yearMatches[yearMatches.length - 1];
+
+    seen.add(slug);
+    results.push({ name, date: `${year}-${month}-${day}`, slug, region });
+  }
+  return results;
+}
+
+/** 목록에서 요청받은 날짜가 정확히 같고 이름이 그럴듯하게 일치하는 첫 항목을 찾는다. */
+function findMarathonGoMatch(list, name, date) {
+  for (const c of list) {
+    if (c.date === date && namesLikelyMatch(c.name, name)) return c;
+  }
+  return null;
+}
+
+/**
+ * 대회 상세페이지 HTML에서 실제 접수 링크를 찾는다. marathongo.co.kr은 "신청하기" 버튼의
+ * href에만 `utm_source=marathongo` 쿼리를 붙인다(내비게이션/로고 등 다른 링크엔 없음) — 실제
+ * 대회 3건을 확인해 검증된 패턴이라 클래스 이름 대신 이 쿼리 문자열을 앵커로 쓴다.
+ */
+function extractMarathonGoRegLink(html) {
+  const m = html.match(/href="([^"]*utm_source=marathongo[^"]*)"/i);
+  if (!m) return null;
+  const href = decodeEntities(m[1]);
+  if (href.startsWith("/") || href.includes("marathongo.co.kr")) return null;
+  return href;
+}
+
+async function fetchMarathonGoList(ctx) {
+  const cacheKey = new Request("https://cache.internal/marathongo-list");
+  const cache = caches.default;
+  try {
+    const cached = await cache.match(cacheKey);
+    if (cached) return await cached.json();
+  } catch (e) {
+    // 캐시 읽기 실패 시 그냥 새로 가져온다
+  }
+
+  const res = await fetch(MARATHONGO_LIST_URL, { headers: UPSTREAM_FETCH_HEADERS });
+  const html = await res.text();
+  const list = extractMarathonGoRaces(html);
+
+  const cacheResponse = new Response(JSON.stringify(list), {
+    headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${MARATHONGO_LIST_CACHE_TTL_SECONDS}` },
+  });
+  ctx.waitUntil(cache.put(cacheKey, cacheResponse));
+  return list;
+}
+
+/** name+date로 marathongo.co.kr에서 실제 접수 링크를 찾는다. 결과는 항상 { found, ... } 형태. */
+async function lookupRegLink(name, date, ctx) {
+  try {
+    const list = await fetchMarathonGoList(ctx);
+    const match = findMarathonGoMatch(list, name, date);
+    if (!match) return { found: false, source: "marathongo" };
+
+    const detailUrl = `${MARATHONGO_ORIGIN}${match.slug}`;
+    const detailRes = await fetch(detailUrl, { headers: UPSTREAM_FETCH_HEADERS });
+    const detailHtml = await detailRes.text();
+    const regUrl = extractMarathonGoRegLink(detailHtml);
+
+    return regUrl
+      ? { found: true, url: regUrl, matchedName: match.name, source: "marathongo", detailUrl }
+      : { found: false, source: "marathongo", matchedName: match.name, detailUrl };
+  } catch (e) {
+    return { found: false, error: "lookup_failed" };
+  }
+}
+
 function buildUpstreamTargets(region) {
   const regionQ = `region=${encodeURIComponent(region)}`;
   return [
@@ -595,6 +761,11 @@ export {
   normalizeDistanceLabel,
   mapRace,
   buildUpstreamTargets,
+  normalizeNameForMatch,
+  namesLikelyMatch,
+  extractMarathonGoRaces,
+  findMarathonGoMatch,
+  extractMarathonGoRegLink,
 };
 
 export default {
@@ -605,9 +776,48 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders(origin) });
     }
+    if (url.pathname === "/api/reglink") {
+      const name = (url.searchParams.get("name") || "").trim();
+      const date = (url.searchParams.get("date") || "").trim();
+      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return new Response(JSON.stringify({ found: false, error: "invalid_params" }), {
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+        });
+      }
+
+      const reglinkCacheUrl = new URL("https://cache.internal/reglink");
+      reglinkCacheUrl.searchParams.set("name", name);
+      reglinkCacheUrl.searchParams.set("date", date);
+      const reglinkCacheKey = new Request(reglinkCacheUrl.toString());
+      const cache = caches.default;
+
+      try {
+        const cached = await cache.match(reglinkCacheKey);
+        if (cached) {
+          const bodyObj = await cached.json();
+          return new Response(JSON.stringify(bodyObj), {
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "HIT" },
+          });
+        }
+      } catch (e) {
+        // 캐시 읽기 실패 시 그냥 새로 조회
+      }
+
+      const bodyObj = await lookupRegLink(name, date, ctx);
+
+      const cacheResponse = new Response(JSON.stringify(bodyObj), {
+        headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${REGLINK_CACHE_TTL_SECONDS}` },
+      });
+      ctx.waitUntil(cache.put(reglinkCacheKey, cacheResponse));
+
+      return new Response(JSON.stringify(bodyObj), {
+        headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "MISS" },
+      });
+    }
+
     if (url.pathname !== "/api/schedule") {
       return new Response(
-        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타)" }),
+        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타) 또는 GET /api/reglink?name=<대회명>&date=<YYYY-MM-DD>" }),
         { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders(origin) } }
       );
     }
