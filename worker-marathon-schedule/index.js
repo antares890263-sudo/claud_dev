@@ -548,6 +548,7 @@ function mapRace(r, statusFromQuery) {
 const MARATHONGO_ORIGIN = "https://marathongo.co.kr";
 const MARATHONGO_LIST_URL = `${MARATHONGO_ORIGIN}/raceSchedule/domestic`;
 const MARATHONGO_LIST_CACHE_TTL_SECONDS = 14400; // 4시간 — 목록 자체는 자주 안 바뀜
+const REGLINK_CACHE_TTL_SECONDS = 43200; // 12시간 — 대회 하나당 접수 링크 조회 결과 캐시
 
 // 집결 시간 표기가 "16:30"처럼 숫자거나 "오전 10시"처럼 한글일 수 있어 둘 다 잡는다.
 const TIME_BEFORE_GATHER_RE = /(\d{1,2}:\d{2}|\d{1,2}\s*시|오전\s*\d{1,2}\s*시?|오후\s*\d{1,2}\s*시?)\s*집결/;
@@ -764,6 +765,55 @@ async function supplementWithMarathonGo(events, region, ctx) {
   }
 }
 
+/** 목록에서 요청받은 날짜가 정확히 같고 이름이 그럴듯하게 일치하는 첫 항목을 찾는다. */
+function findMarathonGoMatch(list, name, date) {
+  for (const c of list) {
+    if (c.date === date && namesLikelyMatch(c.name, name)) return c;
+  }
+  return null;
+}
+
+/**
+ * 대회 상세페이지 HTML에서 실제 접수 링크를 찾는다. marathongo.co.kr은 "신청하기" 버튼의
+ * href에만 `utm_source=marathongo` 쿼리를 붙인다(내비게이션/로고 등 다른 링크엔 없음) — 실제
+ * 대회로 검증된 패턴이라 클래스 이름 대신 이 쿼리 문자열을 앵커로 쓴다.
+ */
+function extractMarathonGoRegLink(html) {
+  const m = html.match(/href="([^"]*utm_source=marathongo[^"]*)"/i);
+  if (!m) return null;
+  const href = decodeEntities(m[1]);
+  if (href.startsWith("/") || href.includes("marathongo.co.kr")) return null;
+  return href;
+}
+
+/**
+ * name+date로 marathongo.co.kr에서 실제 접수 링크를 찾는다(marathonmate.store 대회든, 이미
+ * marathongo.co.kr로 보충된 대회든 상관없이 호출 가능). 결과는 항상 { found, ... } 형태이며
+ * 실패해도 예외를 던지지 않는다 — 이 조회가 실패해도 대회 상세 모달의 나머지 기능엔 영향이
+ * 없어야 한다.
+ */
+async function lookupRegLink(name, date, ctx) {
+  try {
+    const list = await fetchMarathonGoList(ctx);
+    const match = findMarathonGoMatch(list, name, date);
+    if (!match) return { found: false };
+
+    const detailUrl = `${MARATHONGO_ORIGIN}${match.slug}`;
+    const detailRes = await fetch(detailUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MarathonScheduleBot/1.0; personal aggregator)",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+      },
+    });
+    const detailHtml = await detailRes.text();
+    const regUrl = extractMarathonGoRegLink(detailHtml);
+
+    return regUrl ? { found: true, url: regUrl, matchedName: match.name } : { found: false };
+  } catch (e) {
+    return { found: false, error: "lookup_failed" };
+  }
+}
+
 function buildUpstreamTargets(region) {
   const regionQ = `region=${encodeURIComponent(region)}`;
   return [
@@ -840,6 +890,9 @@ export {
   extractMarathonGoRaces,
   mapMarathonGoRace,
   supplementWithMarathonGo,
+  findMarathonGoMatch,
+  extractMarathonGoRegLink,
+  lookupRegLink,
 };
 
 export default {
@@ -850,9 +903,48 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders(origin) });
     }
+    if (url.pathname === "/api/reglink") {
+      const name = (url.searchParams.get("name") || "").trim();
+      const date = (url.searchParams.get("date") || "").trim();
+      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return new Response(JSON.stringify({ found: false, error: "invalid_params" }), {
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+        });
+      }
+
+      const reglinkCacheUrl = new URL("https://cache.internal/reglink");
+      reglinkCacheUrl.searchParams.set("name", name);
+      reglinkCacheUrl.searchParams.set("date", date);
+      const reglinkCacheKey = new Request(reglinkCacheUrl.toString());
+      const cache = caches.default;
+
+      try {
+        const cached = await cache.match(reglinkCacheKey);
+        if (cached) {
+          const bodyObj = await cached.json();
+          return new Response(JSON.stringify(bodyObj), {
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "HIT" },
+          });
+        }
+      } catch (e) {
+        // 캐시 읽기 실패 시 그냥 새로 조회
+      }
+
+      const bodyObj = await lookupRegLink(name, date, ctx);
+
+      const cacheResponse = new Response(JSON.stringify(bodyObj), {
+        headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${REGLINK_CACHE_TTL_SECONDS}` },
+      });
+      ctx.waitUntil(cache.put(reglinkCacheKey, cacheResponse));
+
+      return new Response(JSON.stringify(bodyObj), {
+        headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "MISS" },
+      });
+    }
+
     if (url.pathname !== "/api/schedule") {
       return new Response(
-        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타)" }),
+        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타) 또는 GET /api/reglink?name=<대회명>&date=<YYYY-MM-DD>" }),
         { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders(origin) } }
       );
     }
