@@ -765,10 +765,27 @@ async function supplementWithMarathonGo(events, region, ctx) {
   }
 }
 
-/** 목록에서 요청받은 날짜가 정확히 같고 이름이 그럴듯하게 일치하는 첫 항목을 찾는다. */
+/**
+ * 목록에서 요청받은 이름+날짜와 일치하는 대회를 찾는다. 1순위는 날짜(연도까지)까지 정확히 같고
+ * 이름이 그럴듯하게 일치하는 경우다. marathonmate.store 쪽 연도 표기가 실제와 다른 사례가
+ * 실제로 확인됐다(제23회 철원DMZ국제평화마라톤: marathonmate.store는 대회일을 2027-09-05로
+ * 표기하지만 접수마감은 2026.04.05로, 대회 13개월 전에 접수가 끝난다는 게 되어 앞뒤가 안
+ * 맞는다 — marathonmate.store 자체 데이터 오류로 보인다). 이런 경우까지 접수 링크를 못 찾으면
+ * 기능이 무의미해지므로, 정확히 일치하는 게 없을 때만 2순위로 "월/일이 같고 연도 차이가
+ * 1년 이내이면서 이름이 일치"하는 것도 허용한다 — 대회 목록 병합(supplementWithMarathonGo)
+ * 쪽은 여기에 영향받지 않고 계속 연도까지 정확히 일치해야만 중복으로 본다(잘못 합쳐서 대회가
+ * 안 보이는 사고를 막기 위함).
+ */
 function findMarathonGoMatch(list, name, date) {
   for (const c of list) {
     if (c.date === date && namesLikelyMatch(c.name, name)) return c;
+  }
+  const monthDay = date.slice(5);
+  const year = parseInt(date.slice(0, 4), 10);
+  for (const c of list) {
+    if (c.date.slice(5) !== monthDay) continue;
+    if (Math.abs(parseInt(c.date.slice(0, 4), 10) - year) > 1) continue;
+    if (namesLikelyMatch(c.name, name)) return c;
   }
   return null;
 }
