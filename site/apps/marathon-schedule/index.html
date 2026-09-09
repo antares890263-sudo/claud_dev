@@ -242,6 +242,58 @@
   .card-arrow{flex:none; align-self:center; opacity:.4;}
 
   .deadline-note{font-size:11px; color:var(--ink-faint); margin-top:8px; font-family:'IBM Plex Mono', monospace;}
+  .deadline-note.urgent{color:var(--err); font-weight:700;}
+
+  .fav-btn{
+    flex:none; width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:#fff;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; align-self:flex-start;
+  }
+  .fav-btn svg{transition:none;}
+  .fav-btn.on{border-color:var(--trail); background:var(--trail-soft);}
+  .fav-btn.on svg{fill:var(--trail); stroke:var(--trail);}
+  .done-ribbon{
+    font-size:10.5px; font-weight:700; border-radius:6px; padding:2px 7px; margin-left:2px;
+    background:var(--blue-bg); color:var(--blue);
+  }
+
+  .quick-toggle{
+    font-family:'Noto Sans KR', sans-serif; font-weight:600; font-size:13px; color:var(--ink-soft);
+    background:var(--card-1); border:1px solid var(--line); border-radius:999px; padding:7px 15px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .quick-toggle:hover{border-color:var(--trail); color:var(--trail-2);}
+  .quick-toggle.active{background:var(--trail); border-color:var(--trail); color:#fff;}
+
+  .modal-btn.secondary{background:var(--forest-soft); color:var(--forest-2);}
+  .modal-btn.secondary:hover{background:var(--forest); color:#fff;}
+  .modal-btn.ghost{background:var(--card-2); color:var(--ink-soft); border:1px solid var(--line);}
+  .modal-btn.ghost:hover{border-color:var(--trail); color:var(--trail-2);}
+  .modal-btn.done{background:var(--blue-bg); color:var(--blue);}
+  .modal-btn.done.active{background:var(--blue); color:#fff;}
+
+  .modal-weather{
+    display:none; align-items:center; gap:10px; background:var(--blue-bg); color:var(--blue); border-radius:12px;
+    padding:10px 14px; font-size:12.5px; margin-bottom:14px;
+  }
+  .modal-weather.show{display:flex;}
+  .modal-weather b{font-weight:700;}
+
+  .my-records{margin-top:36px; border-top:1px solid var(--line); padding-top:20px;}
+  .my-records-head{display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;}
+  .my-records-head .m-num{font-family:'Black Han Sans', sans-serif; font-size:18px; color:var(--forest);}
+  .my-records-head .car{font-size:11px; color:var(--ink-faint); font-family:'IBM Plex Mono', monospace;}
+  .my-records-body{display:none; margin-top:14px; flex-direction:column; gap:8px;}
+  .my-records-body.open{display:flex;}
+  .record-row{
+    display:flex; align-items:center; gap:10px; background:var(--card-1); border:1px solid var(--line);
+    border-radius:12px; padding:10px 14px; font-size:13px;
+  }
+  .record-row .rn{flex:1; font-weight:600;}
+  .record-row .rd{color:var(--ink-faint); font-size:11.5px; font-family:'IBM Plex Mono', monospace;}
+  .record-row button{
+    font-size:11.5px; color:var(--trail-2); background:none; border:none; cursor:pointer; text-decoration:underline;
+  }
+  .record-empty{font-size:12.5px; color:var(--ink-faint); padding:6px 2px;}
 
   /* ---------- Empty / footer ---------- */
   .empty{display:none; border:1.5px dashed var(--line); border-radius:16px; padding:56px 20px; text-align:center; color:var(--ink-soft); font-size:14px; margin-top:20px;}
@@ -383,6 +435,11 @@
     <div class="tab-group" id="typeTabs">
       <span class="tab-label">코스</span>
     </div>
+    <button class="quick-toggle" id="favToggle" type="button">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      찜한 대회만
+    </button>
+    <button class="quick-toggle" id="urgentToggle" type="button">🔥 마감임박만</button>
     <button class="clear-btn" id="clearBtn">필터 초기화</button>
   </div>
 
@@ -393,6 +450,14 @@
   <div class="empty" id="emptyState">
     <strong>조건에 맞는 대회가 없습니다</strong>
     <span id="emptyMsg">다른 필터를 선택하거나 검색어를 바꿔보세요.</span>
+  </div>
+
+  <div class="my-records" id="myRecords">
+    <div class="my-records-head" id="myRecordsHead">
+      <span class="m-num">내 완주 기록</span>
+      <span class="car" id="myRecordsCount"></span>
+    </div>
+    <div class="my-records-body" id="myRecordsBody"></div>
   </div>
 
   <footer>
@@ -410,12 +475,24 @@
       <span class="region-tag" id="modalRegionTag"></span>
     </div>
     <div class="modal-name" id="modalName"></div>
+    <div class="modal-weather" id="modalWeather"></div>
     <div class="modal-fields" id="modalFields"></div>
     <div class="modal-actions">
       <a class="modal-btn primary" id="modalSearchLink" target="_blank" rel="noopener">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         대회 정보 검색해서 확인하기
       </a>
+    </div>
+    <div class="modal-actions" style="margin-top:8px;">
+      <button class="modal-btn secondary" id="modalCalBtn" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+        캘린더에 추가
+      </button>
+      <button class="modal-btn ghost" id="modalShareBtn" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+        공유하기
+      </button>
+      <button class="modal-btn done" id="modalDoneBtn" type="button">완주 기록 남기기</button>
     </div>
     <div class="modal-note" id="modalNote">외부 검색 결과로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.</div>
   </div>
@@ -472,6 +549,9 @@
 
   const MONTH_KO = ["","1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
   const WORKER_KEY = "marathonScheduleWorkerUrl";
+  const FAV_KEY = "marathonScheduleFavorites";       // 찜한 대회 (이 브라우저에만 저장)
+  const RECORDS_KEY = "marathonScheduleRecords";     // 완주 기록 (이 브라우저에만 저장)
+  const FILTERS_KEY = "marathonScheduleFilters";     // 마지막에 쓰던 필터 기억
 
   let currentRegion = "강원";
   let workerBase = (localStorage.getItem(WORKER_KEY) || "").trim().replace(/\/+$/,"");
@@ -487,7 +567,62 @@
   let statusFilter = "all";
   let typeFilter = "all";
   let sortBy = "date";
+  let favoritesOnly = false;
+  let urgentOnly = false;
   let reqToken = 0;
+
+  // ---------- 찜 / 완주 기록 (전부 이 브라우저의 localStorage에만 저장 — 로그인 없음) ----------
+  function loadJSON(key, fallback){
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return parsed == null ? fallback : parsed;
+    } catch (e) { return fallback; }
+  }
+  function saveJSON(key, val){
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* 저장 실패해도 앱은 계속 동작 */ }
+  }
+
+  let favorites = new Set(loadJSON(FAV_KEY, []));       // favKey 문자열 집합
+  let records = loadJSON(RECORDS_KEY, []);               // [{ key, name, date, region, memo, loggedAt }]
+
+  // 대회 식별자는 목록을 새로 불러올 때마다 배열 순서가 바뀌면 값이 달라질 수 있어서(id는
+  // idx 기반), 찜/기록처럼 "다음에 다시 왔을 때도 같은 대회"를 알아봐야 하는 데는 대회명+날짜
+  // 조합을 안정적인 키로 쓴다.
+  function favKeyFor(ev){ return `${ev.name}__${ev.date}`; }
+
+  function toggleFavorite(ev){
+    const key = favKeyFor(ev);
+    if (favorites.has(key)) favorites.delete(key); else favorites.add(key);
+    saveJSON(FAV_KEY, [...favorites]);
+  }
+
+  function addRecord(ev, memo){
+    const key = favKeyFor(ev);
+    records = records.filter(r => r.key !== key);
+    records.unshift({ key, name: ev.name, date: ev.date, region: ev.region, memo: memo||"", loggedAt: new Date().toISOString() });
+    saveJSON(RECORDS_KEY, records);
+  }
+  function removeRecord(key){
+    records = records.filter(r => r.key !== key);
+    saveJSON(RECORDS_KEY, records);
+  }
+  function hasRecord(ev){ return records.some(r => r.key === favKeyFor(ev)); }
+
+  // ---------- 필터 기억 ----------
+  function saveFilters(){
+    saveJSON(FILTERS_KEY, { statusFilter, typeFilter, sortBy, favoritesOnly, urgentOnly });
+  }
+  function loadFilters(){
+    const f = loadJSON(FILTERS_KEY, null);
+    if (!f) return;
+    if (typeof f.statusFilter === "string") statusFilter = f.statusFilter;
+    if (typeof f.typeFilter === "string") typeFilter = f.typeFilter;
+    if (typeof f.sortBy === "string") sortBy = f.sortBy;
+    if (typeof f.favoritesOnly === "boolean") favoritesOnly = f.favoritesOnly;
+    if (typeof f.urgentOnly === "boolean") urgentOnly = f.urgentOnly;
+  }
 
   // ---------- Region selector ----------
   function populateRegionSelect(){
@@ -777,7 +912,7 @@
       `<button type="button" class="tab-btn ${statusFilter===val?"active":""}" data-status="${val}">${label}</button>`
     ).join("");
     statusWrap.querySelectorAll(".tab-btn").forEach(btn => {
-      btn.addEventListener("click", () => { statusFilter = btn.dataset.status; renderAll(); });
+      btn.addEventListener("click", () => { statusFilter = btn.dataset.status; saveFilters(); renderAll(); });
     });
 
     const typeWrap = document.getElementById("typeTabs");
@@ -787,18 +922,25 @@
       return `<button type="button" class="tab-btn ${cls}" data-type="${val}">${label}</button>`;
     }).join("");
     typeWrap.querySelectorAll(".tab-btn").forEach(btn => {
-      btn.addEventListener("click", () => { typeFilter = btn.dataset.type; renderAll(); });
+      btn.addEventListener("click", () => { typeFilter = btn.dataset.type; saveFilters(); renderAll(); });
     });
+
+    document.getElementById("favToggle").classList.toggle("active", favoritesOnly);
+    document.getElementById("urgentToggle").classList.toggle("active", urgentOnly);
   }
 
   // ---------- Card / list rendering ----------
+  const starIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+
   function cardHTML(ev){
     const parts = ev.date.split("-").map(Number);
     const d = parts[2] || "?";
     const closed = ev.status === "closed";
     const chips = ev.distances.map(dist => `<span class="chip">${dist}</span>`).join("");
     const regionChip = currentRegion === "all" ? `<span class="region-tag">${ev.region}</span>` : "";
+    const doneRibbon = hasRecord(ev) ? `<span class="done-ribbon">완주</span>` : "";
     let deadlineNote = "";
+    let urgent = false;
     if (ev.deadline){
       const diff = dday(ev.deadline);
       let ddayText;
@@ -806,8 +948,10 @@
       else if (diff > 0) ddayText = `접수마감 D-${diff}`;
       else if (diff === 0) ddayText = "접수마감 오늘";
       else ddayText = `접수마감 ${ev.deadline.replaceAll("-",".")} 마감`;
-      deadlineNote = `<div class="deadline-note">${ddayText}</div>`;
+      urgent = diff !== null && diff >= 0 && diff <= 3;
+      deadlineNote = `<div class="deadline-note ${urgent?"urgent":""}">${urgent?"🔥 ":""}${ddayText}</div>`;
     }
+    const isFav = favorites.has(favKeyFor(ev));
     return `
     <article class="card ${closed?"is-closed":""}" tabindex="0" data-id="${ev.id}" role="button" aria-haspopup="dialog">
       <div class="date-badge">
@@ -816,13 +960,14 @@
       </div>
       <div class="card-body">
         <div class="card-top">
-          <div class="card-name">${ev.name}<span class="type-tag ${ev.type}">${typeLabel(ev.type)}</span>${regionChip}</div>
+          <div class="card-name">${ev.name}<span class="type-tag ${ev.type}">${typeLabel(ev.type)}</span>${regionChip}${doneRibbon}</div>
           <span class="badge ${ev.status}">${statusLabel(ev.status)}</span>
         </div>
         <div class="card-meta">${pinIcon}<span>${ev.location}</span></div>
         <div class="chip-row">${chips}</div>
         ${deadlineNote}
       </div>
+      <button class="fav-btn ${isFav?"on":""}" data-fav-id="${ev.id}" type="button" aria-label="찜하기" title="찜하기">${starIcon}</button>
       <div class="card-arrow">${arrowIcon}</div>
     </article>`;
   }
@@ -833,7 +978,10 @@
       const matchesSearch = !searchTerm || haystack.includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === "all" || ev.status === statusFilter;
       const matchesType = typeFilter === "all" || ev.type === typeFilter;
-      return matchesSearch && matchesStatus && matchesType;
+      const matchesFav = !favoritesOnly || favorites.has(favKeyFor(ev));
+      const diff = ev.deadline ? dday(ev.deadline) : null;
+      const matchesUrgent = !urgentOnly || (diff !== null && diff >= 0 && diff <= 3);
+      return matchesSearch && matchesStatus && matchesType && matchesFav && matchesUrgent;
     });
 
     if (sortBy === "name") list.sort((a,b) => a.name.localeCompare(b.name, "ko"));
@@ -913,14 +1061,148 @@
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(card.dataset.id); }
       });
     });
+    root.querySelectorAll(".fav-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const ev = events.find(x => x.id === btn.dataset.favId);
+        if (!ev) return;
+        toggleFavorite(ev);
+        btn.classList.toggle("on");
+        if (favoritesOnly) renderAll();
+      });
+    });
+  }
+
+  // ---------- 캘린더(.ics) / 공유 / 날씨 ----------
+  function icsEscape(s){
+    return String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+  }
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function addDaysStr(dateStr, days){
+    const d = new Date(dateStr + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + days);
+    return `${d.getUTCFullYear()}${pad2(d.getUTCMonth()+1)}${pad2(d.getUTCDate())}`;
+  }
+  function buildIcs(ev){
+    const dtstart = ev.date.replaceAll("-","");
+    const dtend = addDaysStr(ev.date, 1);
+    const now = new Date();
+    const dtstamp = `${now.getUTCFullYear()}${pad2(now.getUTCMonth()+1)}${pad2(now.getUTCDate())}T${pad2(now.getUTCHours())}${pad2(now.getUTCMinutes())}${pad2(now.getUTCSeconds())}Z`;
+    const desc = [ev.distances.join(", "), ev.url || ""].filter(Boolean).join("\\n");
+    return [
+      "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//marathon-schedule//KO","CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:${favKeyFor(ev).replace(/[^\w가-힣0-9]+/g,"-")}@marathon-schedule`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART;VALUE=DATE:${dtstart}`,
+      `DTEND;VALUE=DATE:${dtend}`,
+      `SUMMARY:${icsEscape(ev.name)}`,
+      `LOCATION:${icsEscape(ev.location)}`,
+      `DESCRIPTION:${icsEscape(desc)}`,
+      "END:VEVENT","END:VCALENDAR",
+    ].join("\r\n");
+  }
+  function downloadIcs(ev){
+    const blob = new Blob([buildIcs(ev)], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${ev.name.replace(/[^\w가-힣0-9]+/g,"_")}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  async function shareEvent(ev){
+    const text = `${ev.name} — ${ev.date}${ev.day?`(${ev.day})`:""} · ${ev.location}`;
+    const url = ev.url || `https://www.google.com/search?q=${encodeURIComponent(ev.name + " 접수")}`;
+    if (navigator.share){
+      try { await navigator.share({ title: ev.name, text, url }); } catch (e) { /* 사용자가 공유를 취소한 경우 등 - 무시 */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      alert("대회 정보를 클립보드에 복사했습니다. 원하는 곳에 붙여넣어 공유해보세요.");
+    } catch (e) {
+      window.prompt("아래 내용을 복사해서 공유해보세요:", `${text}\n${url}`);
+    }
+  }
+
+  // 날씨는 부가 정보라 실패해도 조용히 숨긴다. Open-Meteo(무료, API 키 불필요)로 지역명을
+  // 좌표로 바꾼 뒤, 대회 당일이 예보 범위(대략 15일 이내) 안에 있을 때만 보여준다.
+  const geocodeCache = {};
+  async function geocodeRegion(name){
+    if (!name) return null;
+    if (geocodeCache[name] !== undefined) return geocodeCache[name];
+    try {
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=ko&country=KR`);
+      if (!res.ok) throw new Error("geocode failed");
+      const data = await res.json();
+      const r = data.results && data.results[0];
+      const geo = r ? { lat: r.latitude, lon: r.longitude, name: r.name } : null;
+      geocodeCache[name] = geo;
+      return geo;
+    } catch (e) { geocodeCache[name] = null; return null; }
+  }
+  async function updateModalWeather(ev, myModalToken){
+    const box = document.getElementById("modalWeather");
+    box.classList.remove("show");
+    box.innerHTML = "";
+    if (!ev.date) return;
+    const daysOut = Math.round((new Date(ev.date+"T00:00:00Z") - new Date(todayISO()+"T00:00:00Z")) / 86400000);
+    if (daysOut < 0 || daysOut > 15) return;
+    try {
+      const geo = await geocodeRegion(ev.region || ev.location);
+      if (!geo || myModalToken !== modalToken) return;
+      const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&start_date=${ev.date}&end_date=${ev.date}`);
+      if (!res.ok || myModalToken !== modalToken) return;
+      const data = await res.json();
+      const i = (data.daily && data.daily.time || []).indexOf(ev.date);
+      if (i === -1) return;
+      const tmax = data.daily.temperature_2m_max[i];
+      const tmin = data.daily.temperature_2m_min[i];
+      const pop = data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[i] : null;
+      if (tmax == null || tmin == null) return;
+      box.innerHTML = `⛅ <span><b>${geo.name} 지역 예보</b> — 최고 ${Math.round(tmax)}° · 최저 ${Math.round(tmin)}°${pop!=null?` · 강수확률 ${pop}%`:""} <span style="opacity:.7">(참고용, 대회일이 가까워지면 다시 확인하세요)</span></span>`;
+      box.classList.add("show");
+    } catch (e) { /* 무시 */ }
+  }
+
+  function refreshDoneBtn(ev){
+    const btn = document.getElementById("modalDoneBtn");
+    if (hasRecord(ev)){ btn.textContent = "완주 기록 삭제"; btn.classList.add("active"); }
+    else { btn.textContent = "완주 기록 남기기"; btn.classList.remove("active"); }
   }
 
   // ---------- Modal ----------
   const backdrop = document.getElementById("modalBackdrop");
+  let modalEvent = null;
+  let modalToken = 0;
+
+  document.getElementById("modalCalBtn").addEventListener("click", () => { if (modalEvent) downloadIcs(modalEvent); });
+  document.getElementById("modalShareBtn").addEventListener("click", () => { if (modalEvent) shareEvent(modalEvent); });
+  document.getElementById("modalDoneBtn").addEventListener("click", () => {
+    if (!modalEvent) return;
+    if (hasRecord(modalEvent)){
+      if (confirm("완주 기록을 삭제할까요?")) removeRecord(favKeyFor(modalEvent));
+    } else {
+      const memo = prompt("완주 소감이나 기록을 남겨보세요 (선택, 비워도 됩니다)", "");
+      if (memo === null) return; // 취소
+      addRecord(modalEvent, memo);
+    }
+    refreshDoneBtn(modalEvent);
+    renderMyRecords();
+    renderAll();
+  });
 
   function openModal(id){
     const ev = events.find(e => e.id === id);
     if (!ev) return;
+    modalEvent = ev;
+    const myModalToken = ++modalToken;
+    updateModalWeather(ev, myModalToken);
+    refreshDoneBtn(ev);
 
     document.getElementById("modalBadge").className = `badge ${ev.status}`;
     document.getElementById("modalBadge").textContent = statusLabel(ev.status);
@@ -969,17 +1251,54 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && backdrop.classList.contains("open")) closeModal(); });
 
   document.getElementById("searchInput").addEventListener("input", (e) => { searchTerm = e.target.value; renderAll(); });
-  document.getElementById("sortSelect").addEventListener("change", (e) => { sortBy = e.target.value; renderAll(); });
+  document.getElementById("sortSelect").addEventListener("change", (e) => { sortBy = e.target.value; saveFilters(); renderAll(); });
   document.getElementById("clearBtn").addEventListener("click", () => {
-    searchTerm = ""; statusFilter = "all"; typeFilter = "all";
+    searchTerm = ""; statusFilter = "all"; typeFilter = "all"; favoritesOnly = false; urgentOnly = false;
     document.getElementById("searchInput").value = "";
+    saveFilters();
     renderAll();
   });
+  document.getElementById("favToggle").addEventListener("click", () => {
+    favoritesOnly = !favoritesOnly; saveFilters(); renderAll();
+  });
+  document.getElementById("urgentToggle").addEventListener("click", () => {
+    urgentOnly = !urgentOnly; saveFilters(); renderAll();
+  });
+
+  // ---------- 내 완주 기록 패널 ----------
+  document.getElementById("myRecordsHead").addEventListener("click", () => {
+    document.getElementById("myRecordsBody").classList.toggle("open");
+  });
+  function renderMyRecords(){
+    document.getElementById("myRecordsCount").textContent = `${records.length}건`;
+    const body = document.getElementById("myRecordsBody");
+    if (records.length === 0){
+      body.innerHTML = `<div class="record-empty">아직 기록이 없습니다. 대회를 열어서 "완주 기록 남기기"로 추가해보세요.</div>`;
+      return;
+    }
+    body.innerHTML = records.map(r => `
+      <div class="record-row">
+        <span class="rn">${r.name}${r.memo ? ` — ${r.memo}` : ""}</span>
+        <span class="rd">${r.date}${r.region ? ` · ${r.region}`:""}</span>
+        <button type="button" data-remove-key="${r.key}">삭제</button>
+      </div>
+    `).join("");
+    body.querySelectorAll("[data-remove-key]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        removeRecord(btn.dataset.removeKey);
+        renderMyRecords();
+        renderAll();
+      });
+    });
+  }
 
   // ---------- Init ----------
+  loadFilters();
+  document.getElementById("sortSelect").value = sortBy;
   readHash();
   populateRegionSelect();
   syncHash();
+  renderMyRecords();
   loadEvents();
   window.addEventListener("hashchange", () => { readHash(); populateRegionSelect(); loadEvents(); });
 </script>
