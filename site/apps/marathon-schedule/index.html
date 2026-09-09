@@ -185,15 +185,34 @@
   .skel{background:linear-gradient(90deg, var(--card-1) 0%, var(--card-2) 50%, var(--card-1) 100%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:18px; height:78px; border:1px solid var(--line);}
   @keyframes shimmer{0%{background-position:200% 0;} 100%{background-position:-200% 0;}}
 
+  /* ---------- Month jump nav ---------- */
+  .month-jump{
+    display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    position:sticky; top:0; z-index:3; background:var(--bg); padding:6px 0 10px; margin-bottom:4px;
+    scrollbar-width:none;
+  }
+  .month-jump::-webkit-scrollbar{display:none;}
+  .month-jump-btn{
+    flex:none; font-family:'IBM Plex Mono', monospace; font-size:12.5px; font-weight:600; color:var(--ink-soft);
+    background:var(--card-1); border:1px solid var(--line); border-radius:999px; padding:6px 12px; cursor:pointer;
+    display:flex; align-items:center; gap:6px; transition:all .15s ease; white-space:nowrap;
+  }
+  .month-jump-btn:hover{border-color:var(--trail); color:var(--trail-2);}
+  .month-jump-btn.active{background:var(--forest); border-color:var(--forest); color:#fff;}
+  .month-jump-btn .mj-cnt{font-size:10.5px; opacity:.75;}
+
   /* ---------- Month groups & cards ---------- */
-  .month-group{margin-bottom:8px;}
+  .month-group{margin-bottom:8px; scroll-margin-top:46px;}
   .month-head{
-    display:flex; align-items:baseline; gap:10px; margin:26px 0 14px; position:sticky; top:0; z-index:2;
-    background:var(--bg); padding:8px 0;
+    display:flex; align-items:baseline; gap:10px; margin:26px 0 14px; position:sticky; top:38px; z-index:2;
+    background:var(--bg); padding:8px 0; cursor:pointer; user-select:none;
   }
   .month-head .m-num{font-family:'Black Han Sans', sans-serif; font-size:22px; color:var(--forest);}
   .month-head .m-cnt{font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono', monospace;}
+  .month-head .m-chev{display:flex; align-items:center; transition:transform .18s ease; color:var(--ink-faint); margin-left:2px;}
+  .month-head.collapsed .m-chev{transform:rotate(-90deg);}
   .month-head::after{content:''; flex:1; height:1px; background:var(--line);}
+  .month-group.collapsed .card-list{display:none;}
 
   .card-list{display:flex; flex-direction:column; gap:12px;}
   .card{
@@ -583,6 +602,8 @@
   let favoritesOnly = false;
   let urgentOnly = false;
   let reqToken = 0;
+  let expandedMonths = null; // Set("YYYY-M") — 펼쳐진 월. null이면 아직 초기화 전(첫 렌더에서 가장 가까운 달만 펼침).
+  let expandedMonthsSignature = null; // 마지막으로 expandedMonths를 계산했을 때의 "그룹에 어떤 달이 있었는지" 서명 — 달 구성이 실제로 바뀔 때만 초기 상태를 다시 계산한다.
 
   // ---------- 찜 / 완주 기록 (전부 이 브라우저의 localStorage에만 저장 — 로그인 없음) ----------
   function loadJSON(key, fallback){
@@ -690,6 +711,7 @@
   const rulerIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F4A38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l14-14 4 4-14 14z"/><path d="M8 8l2 2M12 4l2 2M4 12l2 2"/></svg>`;
   const clockIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1F4A38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`;
   const arrowIcon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#20291F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
+  const chevIcon = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
   const warnIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
   const infoIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
 
@@ -1031,6 +1053,8 @@
     return list;
   }
 
+  function monthKeyOf(g){ return `${g.year}-${g.month}`; }
+
   function groupByMonth(list){
     const groups = {};
     list.forEach(ev => {
@@ -1069,12 +1093,40 @@
       root.innerHTML = `<div class="card-list">${list.map(cardHTML).join("")}</div>`;
     } else {
       const groups = groupByMonth(list);
-      root.innerHTML = groups.map(g => `
-        <div class="month-group">
-          <div class="month-head"><span class="m-num">${g.year}년 ${MONTH_KO[g.month]}</span><span class="m-cnt">${g.items.length}개 대회</span></div>
+      // 실제로 목록에 나타나는 "달의 구성"이 바뀔 때만(지역을 바꾸거나 데이터가
+      // 새로 로드되는 등) 펼침 상태를 다시 계산한다 — 같은 달 구성 안에서 검색어나
+      // 상태 필터만 바뀌는 경우에는 사용자가 직접 펼치고 접은 상태를 그대로 유지한다.
+      // 다시 계산할 때는, 목록이 스크롤 부담이 될 만큼 길 때만(여러 달에 걸쳐 대회가
+      // 많을 때) 가장 가까운 달만 펼치고 나머지는 접어서 "9월에 대회가 너무 많아
+      // 10월을 보려면 한참 내려야 하는" 문제를 줄인다. 목록이 짧으면 굳이 접지 않는다.
+      const monthSignature = groups.map(monthKeyOf).join(",");
+      if (expandedMonthsSignature !== monthSignature) {
+        const shouldCollapse = groups.length > 1 && list.length > 15;
+        expandedMonths = shouldCollapse
+          ? new Set(groups.length ? [monthKeyOf(groups[0])] : [])
+          : new Set(groups.map(monthKeyOf));
+        expandedMonthsSignature = monthSignature;
+      }
+      const jumpNav = groups.length > 1 ? `
+        <div class="month-jump" id="monthJump">
+          ${groups.map(g => `
+            <button type="button" class="month-jump-btn ${expandedMonths.has(monthKeyOf(g))?"active":""}" data-month-key="${monthKeyOf(g)}">
+              ${MONTH_KO[g.month]}<span class="mj-cnt">${g.items.length}</span>
+            </button>
+          `).join("")}
+        </div>` : "";
+      root.innerHTML = jumpNav + groups.map(g => {
+        const key = monthKeyOf(g);
+        const isOpen = expandedMonths.has(key);
+        return `
+        <div class="month-group ${isOpen?"":"collapsed"}" data-month-key="${key}">
+          <div class="month-head ${isOpen?"":"collapsed"}" data-month-key="${key}">
+            <span class="m-num">${g.year}년 ${MONTH_KO[g.month]}</span><span class="m-cnt">${g.items.length}개 대회</span><span class="m-chev">${chevIcon}</span>
+          </div>
           <div class="card-list">${g.items.map(cardHTML).join("")}</div>
         </div>
-      `).join("");
+      `;
+      }).join("");
     }
 
     const emptyEl = document.getElementById("emptyState");
@@ -1105,6 +1157,22 @@
         toggleFavorite(ev);
         btn.classList.toggle("on");
         if (favoritesOnly) renderAll();
+      });
+    });
+    root.querySelectorAll(".month-head").forEach(head => {
+      head.addEventListener("click", () => {
+        const key = head.dataset.monthKey;
+        if (expandedMonths.has(key)) expandedMonths.delete(key); else expandedMonths.add(key);
+        renderAll();
+      });
+    });
+    root.querySelectorAll(".month-jump-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.monthKey;
+        expandedMonths.add(key);
+        renderAll();
+        const target = root.querySelector(`.month-group[data-month-key="${key}"]`);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
   }
