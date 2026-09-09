@@ -445,8 +445,13 @@
     { key: "경북", name: "경북" },
     { key: "경남", name: "경남" },
     { key: "제주", name: "제주" },
+    { key: "전국", name: "전국" },
+    { key: "기타", name: "기타" },
   ];
   const REGION_NAME = Object.fromEntries(REGIONS.map(r => [r.key, r.name]));
+  // "전체" 탭은 marathonmate.store엔 없는 개념이라(지역 파라미터를 생략하면 서울 기본값만
+  // 나옴을 실제 사이트에서 확인함) Worker가 아니라 여기서 지역별로 나눠 호출한 뒤 합친다.
+  const REAL_REGIONS = REGIONS.map(r => r.key).filter(k => k !== "all");
 
   // 강원 지역 오프라인 예시 데이터 (Worker 미설정 시 강원 선택하면 이걸 보여줌)
   const FALLBACK_GANGWON = [
@@ -476,6 +481,7 @@
   let loadError = null;
   let usingFallback = false;
   let fetchedAt = null;
+  let partialFail = null; // "전체" 조회 중 일부 지역만 실패했을 때 { fail, total }
 
   let searchTerm = "";
   let statusFilter = "all";
@@ -581,10 +587,44 @@
   }
 
   // ---------- Data loading ----------
+
+  // 지역 하나에 대해 Worker를 호출해서 이벤트 배열을 받아온다 (실패하면 throw).
+  async function fetchOneRegion(region, force){
+    const qs = `region=${encodeURIComponent(region)}${force ? "&force=1" : ""}`;
+    const res = await fetch(`${workerBase}/api/schedule?${qs}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return { events: data.events || [], fetchedAt: data.fetchedAt };
+  }
+
+  // "전체" 탭: marathonmate.store엔 전국 통합 조회가 없어서(region 생략 시 서울 기본값만
+  // 나옴), 모든 실제 지역을 병렬로 각각 호출한 뒤 여기서 합친다. 지역 하나가 실패해도
+  // 나머지는 그대로 보여주고, 전부 실패했을 때만 에러로 처리한다.
+  async function fetchAllRegions(force){
+    const results = await Promise.allSettled(REAL_REGIONS.map(r => fetchOneRegion(r, force)));
+    const merged = [];
+    const seen = new Set();
+    let failCount = 0;
+    let latestFetchedAt = null;
+    for (const r of results){
+      if (r.status !== "fulfilled"){ failCount++; continue; }
+      if (r.value.fetchedAt) latestFetchedAt = r.value.fetchedAt;
+      for (const ev of r.value.events){
+        const key = ev.id || `${ev.name}__${ev.date}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(ev);
+      }
+    }
+    return { events: merged, failCount, total: REAL_REGIONS.length, fetchedAt: latestFetchedAt };
+  }
+
   async function loadEvents(){
     const myToken = ++reqToken;
     loading = true;
     loadError = null;
+    partialFail = null;
     usingFallback = false;
     renderStatusArea();
     renderSkeleton();
@@ -606,18 +646,18 @@
     }
 
     try {
-      const url = `${workerBase}/api/schedule?region=${encodeURIComponent(currentRegion)}`;
-      const res = await fetch(url);
-      if (myToken !== reqToken) return;
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (myToken !== reqToken) return;
-      if (data.error){
-        loadError = data.error;
-        events = [];
+      if (currentRegion === "all"){
+        const { events: merged, failCount, total } = await fetchAllRegions(false);
+        if (myToken !== reqToken) return;
+        if (failCount > 0 && failCount === total) throw new Error("upstream_fetch_failed");
+        events = merged.map(normalizeEvent);
+        fetchedAt = new Date().toISOString();
+        partialFail = failCount > 0 ? { fail: failCount, total } : null;
       } else {
-        events = (data.events || []).map(normalizeEvent);
-        fetchedAt = data.fetchedAt || new Date().toISOString();
+        const { events: raw, fetchedAt: fa } = await fetchOneRegion(currentRegion, false);
+        if (myToken !== reqToken) return;
+        events = raw.map(normalizeEvent);
+        fetchedAt = fa || new Date().toISOString();
       }
     } catch (err) {
       if (myToken !== reqToken) return;
@@ -633,30 +673,39 @@
     renderAll();
   }
 
-  function forceRefresh(){
+  async function forceRefresh(){
     if (!workerBase) { loadEvents(); return; }
     const btn = document.getElementById("refreshBtn");
     btn.classList.add("spinning");
     const myToken = ++reqToken;
     loading = true;
+    partialFail = null;
     renderStatusArea();
-    fetch(`${workerBase}/api/schedule?region=${encodeURIComponent(currentRegion)}&force=1`)
-      .then(res => res.json())
-      .then(data => {
+    try {
+      if (currentRegion === "all"){
+        const { events: merged, failCount, total } = await fetchAllRegions(true);
         if (myToken !== reqToken) return;
-        loadError = data.error || null;
-        events = (data.events || []).map(normalizeEvent);
-        fetchedAt = data.fetchedAt || new Date().toISOString();
-        usingFallback = false;
-      })
-      .catch(err => { if (myToken===reqToken) loadError = String(err.message||err); })
-      .finally(() => {
+        if (failCount > 0 && failCount === total) throw new Error("upstream_fetch_failed");
+        events = merged.map(normalizeEvent);
+        fetchedAt = new Date().toISOString();
+        partialFail = failCount > 0 ? { fail: failCount, total } : null;
+      } else {
+        const { events: raw, fetchedAt: fa } = await fetchOneRegion(currentRegion, true);
         if (myToken !== reqToken) return;
-        loading = false;
-        btn.classList.remove("spinning");
-        renderStatusArea();
-        renderAll();
-      });
+        events = raw.map(normalizeEvent);
+        fetchedAt = fa || new Date().toISOString();
+      }
+      usingFallback = false;
+      loadError = null;
+    } catch (err) {
+      if (myToken === reqToken) loadError = String(err.message || err);
+    } finally {
+      if (myToken !== reqToken) return;
+      loading = false;
+      btn.classList.remove("spinning");
+      renderStatusArea();
+      renderAll();
+    }
   }
   document.getElementById("refreshBtn").addEventListener("click", forceRefresh);
 
@@ -696,6 +745,13 @@
       banner.innerHTML = `<div class="banner error">${warnIcon}<div>
         <b>실시간 데이터를 가져오지 못했습니다.</b> (${loadError})<br>
         ${usingFallback ? "대신 강원 지역 예시 데이터를 보여드리고 있어요." : "Worker 주소가 올바른지, 배포가 정상인지 확인해주세요."}
+        <div class="banner-actions"><button id="retryBtn" type="button">다시 시도</button></div>
+      </div></div>`;
+      const retryBtn = document.getElementById("retryBtn");
+      if (retryBtn) retryBtn.addEventListener("click", loadEvents);
+    } else if (partialFail){
+      banner.innerHTML = `<div class="banner warn">${warnIcon}<div>
+        일부 지역(${partialFail.fail}/${partialFail.total}개) 정보를 가져오지 못했어요. 나머지 지역은 정상적으로 표시되고 있습니다.
         <div class="banner-actions"><button id="retryBtn" type="button">다시 시도</button></div>
       </div></div>`;
       const retryBtn = document.getElementById("retryBtn");
