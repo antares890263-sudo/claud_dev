@@ -304,8 +304,6 @@
   .modal-btn.reglink{display:none; background:var(--forest); color:#fff;}
   .modal-btn.reglink.show{display:inline-flex;}
   .modal-btn.reglink:hover{background:var(--forest-2);}
-  .modal-btn.primary.demoted{background:var(--card-2); color:var(--ink-soft); border:1px solid var(--line);}
-  .modal-btn.primary.demoted:hover{border-color:var(--forest); color:var(--forest);}
   .reglink-checking{font-size:11.5px; color:var(--ink-faint); margin-top:8px; display:none;}
   .reglink-checking.show{display:block;}
 
@@ -1254,7 +1252,7 @@
     const searchLink = document.getElementById("modalSearchLink");
     const checking = document.getElementById("regLinkChecking");
     btn.classList.remove("show");
-    searchLink.classList.remove("demoted");
+    searchLink.style.display = ""; // 일단 보이는 상태로 되돌려둔다 (기본값 = 네이버 검색 버튼)
     checking.classList.remove("show");
     if (!ev.date) return;
 
@@ -1275,13 +1273,13 @@
     if (result && result.found && result.url){
       btn.href = result.url;
       btn.classList.add("show");
-      searchLink.classList.add("demoted"); // 실제 링크가 있으니 검색 링크는 보조 수단으로 낮춘다
+      searchLink.style.display = "none"; // 실제 접수 링크가 있으니 네이버 검색 버튼은 아예 숨긴다
       document.getElementById("modalNote").textContent =
         "이름·날짜가 일치하는 대회를 찾아 자동으로 연결한 실제 접수 링크입니다. 자동 매칭이라 다른 " +
         "대회로 잘못 연결될 수 있으니 결제 전 대회명을 꼭 확인하세요.";
     }
     // 실제 링크를 못 찾은 경우엔 openModal()이 이미 기본값으로 넣어둔 네이버 검색 링크를
-    // 그대로 둔다 — 위에서 demoted 클래스를 지웠으니 버튼은 다시 primary 스타일로 보인다.
+    // 그대로 둔다(위에서 다시 보이게 해뒀다) — 이 경우엔 네이버 검색 버튼만 활성화된다.
   }
 
   function refreshDoneBtn(ev){
