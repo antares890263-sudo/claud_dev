@@ -544,7 +544,7 @@
       </button>
       <button class="modal-btn done" id="modalDoneBtn" type="button">완주 기록 남기기</button>
     </div>
-    <div class="modal-note" id="modalNote">외부 검색 결과로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.</div>
+    <div class="modal-note" id="modalNote">⚠ 실제 접수 링크를 찾지 못해 검색 결과로 안내해드려요. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.</div>
   </div>
 </div>
 
@@ -1279,17 +1279,9 @@
       document.getElementById("modalNote").textContent =
         "이름·날짜가 일치하는 대회를 찾아 자동으로 연결한 실제 접수 링크입니다. 자동 매칭이라 다른 " +
         "대회로 잘못 연결될 수 있으니 결제 전 대회명을 꼭 확인하세요.";
-    } else {
-      // 실제 접수 링크를 못 찾은 경우: ev.url이 있어도 그건 marathonmate.store 자체 상세페이지일
-      // 뿐이고, 그 페이지엔 접수 링크가 없는 경우가 대부분이라("접수 링크 없음 · 주최 공지 확인")
-      // 그대로 두면 막다른 페이지로 안내하게 된다. 그래서 실제 링크를 못 찾았을 때는 항상 대회명으로
-      // 네이버 검색을 바로 실행하는 링크로 바꿔서, 최소한 사용자가 직접 접수처를 찾아볼 수 있게 한다.
-      const parts = ev.date.split("-").map(Number);
-      searchLink.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(ev.name + " " + (parts[0]||"") + " 접수")}`;
-      searchLink.lastChild.textContent = "네이버에서 검색해서 확인하기";
-      document.getElementById("modalNote").textContent =
-        "⚠ 실제 접수 링크를 찾지 못해 검색 결과로 안내해드려요. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
     }
+    // 실제 링크를 못 찾은 경우엔 openModal()이 이미 기본값으로 넣어둔 네이버 검색 링크를
+    // 그대로 둔다 — 위에서 demoted 클래스를 지웠으니 버튼은 다시 primary 스타일로 보인다.
   }
 
   function refreshDoneBtn(ev){
@@ -1350,15 +1342,13 @@
 
     const searchLink = document.getElementById("modalSearchLink");
     const modalNote = document.getElementById("modalNote");
-    if (ev.url){
-      searchLink.href = ev.url;
-      searchLink.lastChild.textContent = "대회 상세페이지 열기";
-      modalNote.textContent = "대회 정보 출처 페이지로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
-    } else {
-      searchLink.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(ev.name + " " + (parts[0]||"") + " 접수")}`;
-      searchLink.lastChild.textContent = "네이버에서 검색해서 확인하기";
-      modalNote.textContent = "⚠ 실제 접수 링크를 찾지 못해 검색 결과로 안내해드려요. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
-    }
+    // marathonmate.store 자체 상세페이지(ev.url)는 접수 관련 정보가 없는 경우가 대부분이라
+    // ("접수 링크 없음 · 주최 공지 확인") 더 이상 링크 대상으로 쓰지 않는다 — 항상 대회명으로
+    // 네이버 검색을 바로 실행하는 링크를 기본값으로 둔다. 실제 접수 링크를 찾으면
+    // updateModalRegLink()가 이 버튼을 보조 수단으로 낮추고 위에 진짜 접수 버튼을 보여준다.
+    searchLink.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(ev.name + " " + (parts[0]||"") + " 접수")}`;
+    searchLink.lastChild.textContent = "네이버에서 검색해서 확인하기";
+    modalNote.textContent = "⚠ 실제 접수 링크를 찾지 못해 검색 결과로 안내해드려요. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
 
     backdrop.classList.add("open");
     document.body.style.overflow = "hidden";
