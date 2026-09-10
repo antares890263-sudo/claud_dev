@@ -895,6 +895,40 @@ async function extractEventsWithAi(env, html) {
 // — 이 기능이 실패해도 접수 링크 등 나머지 기능에는 영향이 없어야 한다.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 수동 코스 이미지 매핑 — 자동 스크래핑/AI 분류가 못 믿을 사이트가 많아서, 자주 찾는 인기
+// 대회 몇 개는 사람이 직접 "대회명::날짜 -> 코스 이미지 URL"을 등록해둔다. 여기 등록된 대회는
+// 스크래핑/AI 분류를 아예 건너뛰고 이 값을 그대로(항상 100% 정확하게) 반환한다 — 또한 Workers AI
+// 호출도 안 하니 더 빠르고 무료 티어 뉴런도 안 쓴다. 새 스토리지(KV/R2) 없이 코드 안에 그대로
+// 두는 이유는 개수가 적고 자주 안 바뀌어서, 배포할 때 같이 관리하는 게 더 간단하기 때문이다.
+// 다만 대회명이나 날짜가 해마다 바뀌면(예: "제6회"->"제7회") 이 항목도 같이 갱신해줘야 한다 —
+// 이름/날짜가 하나도 안 맞으면 그냥 자동 스크래핑 경로로 조용히 넘어간다(에러 없음).
+//
+// 새 대회를 추가하려면 /api/schedule 응답에 나오는 정확한 name/date로 키를 맞춰서 한 줄 추가:
+//   "대회명::YYYY-MM-DD": {
+//     imageUrls: ["https://.../course_map.jpg"], // 순서대로 보여줌, 여러 장 가능
+//     sourceUrl: "https://공식사이트/코스안내",     // 어디서 가져왔는지(참고용, 없어도 됨)
+//   },
+const MANUAL_COURSE_IMAGES = {
+  // 예시:
+  // "2026 안양천 하프 마라톤::2026-09-19": {
+  //   imageUrls: ["https://aychalf.kr/img/course_half.jpg"],
+  //   sourceUrl: "https://aychalf.kr/info/course.asp",
+  // },
+};
+
+function manualCourseKey(name, date) {
+  return `${(name || "").trim()}::${date}`;
+}
+
+/** 수동 등록된 코스 이미지가 있으면 { found:true, imageUrls, sourceUrl, manual:true }를,
+ * 없으면 null을 반환한다. */
+function getManualCourseImage(name, date) {
+  const entry = MANUAL_COURSE_IMAGES[manualCourseKey(name, date)];
+  if (!entry || !Array.isArray(entry.imageUrls) || entry.imageUrls.length === 0) return null;
+  return { found: true, imageUrls: entry.imageUrls, sourceUrl: entry.sourceUrl || null, manual: true };
+}
+
 const COURSE_CACHE_TTL_SECONDS = 86400; // 24시간 — 한 번 찾은 코스 이미지는 잘 안 바뀐다
 // 코스 안내 링크로 보이는 텍스트/href 키워드. "코스안내/대회코스" 같은 확실한 키워드를 먼저 찾고,
 // 그런 링크가 하나도 없을 때만 "소개/안내/route/map" 같은 느슨한 키워드로 한 번 더 찾는다 —
@@ -1104,6 +1138,8 @@ export {
   extractImageCandidates,
   classifyCourseImages,
   lookupCourseImage,
+  getManualCourseImage,
+  MANUAL_COURSE_IMAGES,
 };
 
 export default {
@@ -1162,6 +1198,14 @@ export default {
       if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^https?:\/\//i.test(regUrl)) {
         return new Response(JSON.stringify({ found: false, error: "invalid_params" }), {
           status: 400, headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+        });
+      }
+
+      // 수동 등록된 대회면 스크래핑/AI/캐시를 전부 건너뛰고 바로 확정 답을 준다.
+      const manual = getManualCourseImage(name, date);
+      if (manual) {
+        return new Response(JSON.stringify(manual), {
+          headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "MANUAL" },
         });
       }
 
