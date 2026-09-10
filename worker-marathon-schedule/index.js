@@ -896,10 +896,18 @@ async function extractEventsWithAi(env, html) {
 // ---------------------------------------------------------------------------
 
 const COURSE_CACHE_TTL_SECONDS = 86400; // 24시간 — 한 번 찾은 코스 이미지는 잘 안 바뀐다
-// 코스 안내 링크로 보이는 텍스트/href 키워드 (한글/영문 둘 다 느슨하게 잡는다)
-const COURSE_LINK_KEYWORDS = /코스\s*안내|코스\s*소개|대회\s*코스|course\s*(info|guide|map)?/i;
-// 명백히 코스 지도가 아닐 이미지 파일명 패턴 — AI에게 넘기기 전에 미리 걸러서 후보를 줄인다
-const COURSE_IMG_SKIP_PATTERN = /logo|favicon|sponsor|banner|btn[-_]|icon|sprite|\.svg(\?|$)|kakao|naver_?map|qr[-_]?code|gift|award/i;
+// 코스 안내 링크로 보이는 텍스트/href 키워드. "코스안내/대회코스" 같은 확실한 키워드를 먼저 찾고,
+// 그런 링크가 하나도 없을 때만 "소개/안내/route/map" 같은 느슨한 키워드로 한 번 더 찾는다 —
+// 실제로는 별도 "코스안내" 페이지 없이 "OO런 소개"류 일반 안내 페이지 안에 코스 지도가 같이
+// 들어있는 사이트가 많았다(현대 포레스트런 등). 느슨한 키워드를 곧바로 최우선으로 쓰면 "이용안내"
+// 같은 엉뚱한 링크를 먼저 잡아버릴 수 있어서, 확실한 키워드보다는 후순위로만 쓴다. 어느 쪽이든
+// 잘못된 페이지로 넘어가도(lookupCourseImage가 메인페이지 후보와 합치므로) 최악의 경우
+// 후보가 늘지 않을 뿐 기존 결과가 나빠지진 않는다.
+const COURSE_LINK_KEYWORDS_STRONG = /코스\s*안내|코스\s*소개|코스\s*(맵|지도)|대회\s*코스|대회\s*안내|대회\s*소개|레이스\s*(정보|안내)|route\s*map|track\s*map|course\s*(info|guide|map)/i;
+const COURSE_LINK_KEYWORDS_WEAK = /소개|안내|route|map/i;
+// 명백히 코스 지도가 아닐 이미지 파일명 패턴 — AI에게 넘기기 전에 미리 걸러서 후보를 줄인다.
+// blank/placeholder/spinner류는 lazy-load 전용 자리표시자 이미지라 걸러야 한다.
+const COURSE_IMG_SKIP_PATTERN = /logo|favicon|sponsor|banner|btn[-_]|icon|sprite|\.svg(\?|$)|kakao|naver_?map|qr[-_]?code|gift|award|blank|placeholder|spinner|loading|1x1|pixel\.(gif|png)/i;
 
 async function fetchPageText(targetUrl) {
   const res = await fetch(targetUrl, {
@@ -912,34 +920,70 @@ async function fetchPageText(targetUrl) {
   return await res.text();
 }
 
-/** HTML에서 <a href>...</a> 중 링크 텍스트나 href 자체에 "코스안내" 류 키워드가 들어간 첫 링크를
- * 찾아 절대경로로 반환한다. 없으면 null. */
+/** HTML에서 <a href>...</a> 중 링크 텍스트나 href 자체에 "코스안내" 류 키워드가 들어간 링크를
+ * 찾아 절대경로로 반환한다. 확실한 키워드(COURSE_LINK_KEYWORDS_STRONG)를 우선 찾고, 하나도 없으면
+ * 느슨한 키워드(COURSE_LINK_KEYWORDS_WEAK)로 한 번 더 찾는다. 둘 다 없으면 null. */
 function findCourseLink(html, baseUrl) {
   const anchorRe = /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]{0,80}?)<\/a>/gi;
+  const anchors = [];
   let m;
   while ((m = anchorRe.exec(html))) {
-    const href = decodeEntities(m[1]);
-    const text = stripHtml(m[2]);
-    if (COURSE_LINK_KEYWORDS.test(text) || COURSE_LINK_KEYWORDS.test(href)) {
-      try {
-        return new URL(href, baseUrl).toString();
-      } catch (e) {
-        continue;
-      }
+    anchors.push({ href: decodeEntities(m[1]), text: stripHtml(m[2]) });
+  }
+
+  const resolve = (a) => {
+    try {
+      return new URL(a.href, baseUrl).toString();
+    } catch (e) {
+      return null;
+    }
+  };
+
+  for (const a of anchors) {
+    if (COURSE_LINK_KEYWORDS_STRONG.test(a.text) || COURSE_LINK_KEYWORDS_STRONG.test(a.href)) {
+      const resolved = resolve(a);
+      if (resolved) return resolved;
+    }
+  }
+  for (const a of anchors) {
+    if (COURSE_LINK_KEYWORDS_WEAK.test(a.text) || COURSE_LINK_KEYWORDS_WEAK.test(a.href)) {
+      const resolved = resolve(a);
+      if (resolved) return resolved;
     }
   }
   return null;
 }
 
-/** HTML에서 <img src>를 절대경로로 뽑아낸다. 로고/아이콘/배너처럼 명백히 코스 지도가 아닐
- * 파일명은 미리 걸러서, AI에게 넘길 후보 수(및 프롬프트 크기)를 줄인다. */
+// lazy-loading 사이트들은 <img src=""> 를 비워두고 실제 경로를 data-src류 속성에 담아뒀다가
+// JS로 나중에 src로 옮겨 채운다. 우리는 JS를 실행하지 않으므로 이 속성들을 직접 봐야 한다.
+const LAZY_SRC_ATTR_RE = /(?:data-src|data-original|data-lazy-src|data-lazy|data-url)\s*=\s*"([^"]+)"/i;
+const PLAIN_SRC_ATTR_RE = /\bsrc\s*=\s*"([^"]*)"/i;
+const SRCSET_ATTR_RE = /\bsrcset\s*=\s*"([^"]+)"/i;
+
+/** <img ...> 태그 하나의 속성 문자열에서 실제로 쓸만한 이미지 경로 하나를 고른다.
+ * lazy-load 속성 > 일반 src > srcset의 첫 후보 순으로 본다. */
+function pickImgSrc(attrs) {
+  const lazy = attrs.match(LAZY_SRC_ATTR_RE);
+  if (lazy && lazy[1]) return lazy[1];
+  const plain = attrs.match(PLAIN_SRC_ATTR_RE);
+  if (plain && plain[1] && plain[1].trim() && !plain[1].startsWith("data:")) return plain[1];
+  const srcset = attrs.match(SRCSET_ATTR_RE);
+  if (srcset && srcset[1]) {
+    const first = srcset[1].split(",")[0].trim().split(/\s+/)[0];
+    if (first) return first;
+  }
+  return null;
+}
+
+/** HTML에서 이미지 경로를 절대경로로 뽑아낸다(lazy-load 속성 포함). 로고/아이콘/배너처럼
+ * 명백히 코스 지도가 아닐 파일명은 미리 걸러서, AI에게 넘길 후보 수(및 프롬프트 크기)를 줄인다. */
 function extractImageCandidates(html, baseUrl) {
-  const imgRe = /<img\s+[^>]*src="([^"]+)"[^>]*>/gi;
+  const imgRe = /<img\s+([^>]*)>/gi;
   const urls = [];
   const seen = new Set();
   let m;
   while ((m = imgRe.exec(html))) {
-    const src = decodeEntities(m[1]);
+    const src = decodeEntities(pickImgSrc(m[1]) || "");
     if (!src || src.startsWith("data:") || COURSE_IMG_SKIP_PATTERN.test(src)) continue;
     let abs;
     try {
@@ -988,35 +1032,42 @@ async function classifyCourseImages(env, candidateUrls) {
 
 /**
  * 실제 접수 사이트(regUrl — lookupRegLink가 이미 찾아둔, marathongo.co.kr에서 검증된 링크)를
- * 대상으로 코스 지도 이미지를 찾아본다. (1) 메인페이지를 가져와 "코스안내" 류 링크가 있으면
- * 그 서브페이지를(없거나 다른 도메인이면 메인페이지 자체를) 대상으로 (2) 이미지 후보를 추리고
- * (3) Workers AI에게 그 중 코스 지도로 보이는 것만 골라달라고 맡긴다.
+ * 대상으로 코스 지도 이미지를 찾아본다. (1) 메인페이지에서 이미지 후보를 먼저 추리고, "코스안내"
+ * 류 링크가 같은 오리진에 있으면 그 서브페이지도 같이 가져와 후보를 합친다(서브페이지 후보를
+ * 앞쪽에 둬서 더 구체적인 페이지를 우선시킨다) — 사이트마다 코스 지도가 메인페이지에 바로 있기도
+ * 하고, 별도 서브페이지에만 있기도 해서 어느 한쪽만 보면 놓치는 경우가 많았다. (2) Workers AI에게
+ * 합쳐진 후보 중 코스 지도로 보이는 것만 골라달라고 맡긴다.
  */
 async function lookupCourseImage(regUrl, env) {
   try {
     const mainHtml = await fetchPageText(regUrl);
     const courseLink = findCourseLink(mainHtml, regUrl);
 
-    let targetHtml = mainHtml;
-    let targetUrl = regUrl;
+    let candidates = extractImageCandidates(mainHtml, regUrl);
+    let sourceUrl = regUrl;
+
     if (courseLink) {
       try {
         // 임의의 외부 사이트로 새는 걸 막기 위해, 코스안내 링크가 같은 사이트(오리진) 안일
-        // 때만 따라간다. 다른 오리진이면 그냥 메인페이지를 대상으로 계속 진행한다.
+        // 때만 따라간다. 다른 오리진이면 그냥 메인페이지 후보만으로 계속 진행한다.
         if (new URL(courseLink).origin === new URL(regUrl).origin) {
-          targetHtml = await fetchPageText(courseLink);
-          targetUrl = courseLink;
+          const courseHtml = await fetchPageText(courseLink);
+          const courseCandidates = extractImageCandidates(courseHtml, courseLink);
+          if (courseCandidates.length > 0) {
+            const merged = [...courseCandidates, ...candidates];
+            candidates = [...new Set(merged)].slice(0, 25);
+            sourceUrl = courseLink; // 표시용 출처는 더 구체적인 서브페이지로
+          }
         }
       } catch (e) {
         // 서브페이지 조회 실패해도 메인페이지 후보로 계속 진행
       }
     }
 
-    const candidates = extractImageCandidates(targetHtml, targetUrl);
     if (candidates.length === 0) return { found: false };
 
     const imageUrls = await classifyCourseImages(env, candidates);
-    return imageUrls.length > 0 ? { found: true, imageUrls, sourceUrl: targetUrl } : { found: false };
+    return imageUrls.length > 0 ? { found: true, imageUrls, sourceUrl } : { found: false };
   } catch (e) {
     return { found: false, error: "lookup_failed" };
   }
