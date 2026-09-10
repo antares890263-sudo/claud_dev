@@ -1279,6 +1279,16 @@
       document.getElementById("modalNote").textContent =
         "이름·날짜가 일치하는 대회를 찾아 자동으로 연결한 실제 접수 링크입니다. 자동 매칭이라 다른 " +
         "대회로 잘못 연결될 수 있으니 결제 전 대회명을 꼭 확인하세요.";
+    } else {
+      // 실제 접수 링크를 못 찾은 경우: ev.url이 있어도 그건 marathonmate.store 자체 상세페이지일
+      // 뿐이고, 그 페이지엔 접수 링크가 없는 경우가 대부분이라("접수 링크 없음 · 주최 공지 확인")
+      // 그대로 두면 막다른 페이지로 안내하게 된다. 그래서 실제 링크를 못 찾았을 때는 항상
+      // 검색 링크로 바꿔서, 최소한 사용자가 직접 접수처를 찾아볼 수 있게 한다.
+      const parts = ev.date.split("-").map(Number);
+      searchLink.href = `https://www.google.com/search?q=${encodeURIComponent(ev.name + " " + (parts[0]||"") + " 접수")}`;
+      searchLink.lastChild.textContent = "대회 정보 검색해서 확인하기";
+      document.getElementById("modalNote").textContent =
+        "실제 접수 링크를 자동으로 찾지 못해 검색 결과로 연결됩니다. 접수처·환불 규정 등 세부 사항은 공식 홈페이지를 확인하세요.";
     }
   }
 
