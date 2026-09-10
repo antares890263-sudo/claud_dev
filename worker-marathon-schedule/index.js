@@ -883,6 +883,145 @@ async function extractEventsWithAi(env, html) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 코스 지도 이미지 찾기 — 실제 접수 사이트(lookupRegLink로 이미 찾은 링크)를 대상으로만
+// 동작한다. marathonmate.store/marathongo.co.kr 어디에도 코스 지도가 없다는 걸 확인했고,
+// 대회마다 실제 접수 사이트가 자체 홈페이지/카페/폼 등으로 완전히 제각각이라 구조를 미리
+// 가정할 수 없다 — 그래서 (1) "코스안내" 류 링크를 느슨하게 찾아 따라가보고 (2) 그 페이지의
+// <img> 후보들을 추린 뒤 (3) Workers AI에게 그 중 실제 코스 지도로 보이는 것만 골라달라고
+// 맡기는, 최대한 사이트 구조에 안 얽매이는 방식으로 시도한다. 실패(사이트 구조를 못 읽거나,
+// 로그인/자바스크립트 렌더링 때문에 내용을 못 가져오거나, 코스 지도가 아예 없는 경우 등)를
+// 정상 케이스로 취급해서 항상 { found, imageUrls } 형태로만 반환하고 절대 예외를 던지지 않는다
+// — 이 기능이 실패해도 접수 링크 등 나머지 기능에는 영향이 없어야 한다.
+// ---------------------------------------------------------------------------
+
+const COURSE_CACHE_TTL_SECONDS = 86400; // 24시간 — 한 번 찾은 코스 이미지는 잘 안 바뀐다
+// 코스 안내 링크로 보이는 텍스트/href 키워드 (한글/영문 둘 다 느슨하게 잡는다)
+const COURSE_LINK_KEYWORDS = /코스\s*안내|코스\s*소개|대회\s*코스|course\s*(info|guide|map)?/i;
+// 명백히 코스 지도가 아닐 이미지 파일명 패턴 — AI에게 넘기기 전에 미리 걸러서 후보를 줄인다
+const COURSE_IMG_SKIP_PATTERN = /logo|favicon|sponsor|banner|btn[-_]|icon|sprite|\.svg(\?|$)|kakao|naver_?map|qr[-_]?code|gift|award/i;
+
+async function fetchPageText(targetUrl) {
+  const res = await fetch(targetUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; MarathonScheduleBot/1.0; personal aggregator)",
+      "Accept-Language": "ko-KR,ko;q=0.9",
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+/** HTML에서 <a href>...</a> 중 링크 텍스트나 href 자체에 "코스안내" 류 키워드가 들어간 첫 링크를
+ * 찾아 절대경로로 반환한다. 없으면 null. */
+function findCourseLink(html, baseUrl) {
+  const anchorRe = /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]{0,80}?)<\/a>/gi;
+  let m;
+  while ((m = anchorRe.exec(html))) {
+    const href = decodeEntities(m[1]);
+    const text = stripHtml(m[2]);
+    if (COURSE_LINK_KEYWORDS.test(text) || COURSE_LINK_KEYWORDS.test(href)) {
+      try {
+        return new URL(href, baseUrl).toString();
+      } catch (e) {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+/** HTML에서 <img src>를 절대경로로 뽑아낸다. 로고/아이콘/배너처럼 명백히 코스 지도가 아닐
+ * 파일명은 미리 걸러서, AI에게 넘길 후보 수(및 프롬프트 크기)를 줄인다. */
+function extractImageCandidates(html, baseUrl) {
+  const imgRe = /<img\s+[^>]*src="([^"]+)"[^>]*>/gi;
+  const urls = [];
+  const seen = new Set();
+  let m;
+  while ((m = imgRe.exec(html))) {
+    const src = decodeEntities(m[1]);
+    if (!src || src.startsWith("data:") || COURSE_IMG_SKIP_PATTERN.test(src)) continue;
+    let abs;
+    try {
+      abs = new URL(src, baseUrl).toString();
+    } catch (e) {
+      continue;
+    }
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    urls.push(abs);
+    if (urls.length >= 25) break; // AI에게 넘길 후보 상한
+  }
+  return urls;
+}
+
+const COURSE_CLASSIFY_SYSTEM_PROMPT = `너는 마라톤/러닝 대회 공식 사이트에서 뽑아낸 이미지 URL 목록을 보고,
+그 중 "코스 지도"(대회 경로/루트를 보여주는 지도나 그림)로 보이는 이미지만 골라내는 필터다.
+로고, 후원사 배너, 아이콘, QR코드, 참가상품 사진, 단체사진 같은 건 코스 지도가 아니다.
+URL 문자열 자체(course, map, route, 코스 같은 단어 포함 여부 등)를 단서로 판단해라.
+반드시 입력으로 주어진 URL 중에서만 골라야 하며, 새로운 URL을 만들어내면 안 된다.
+코스 지도로 보이는 URL만 담은 JSON 배열만 출력해라. 설명 문장이나 마크다운은 절대 붙이지 마라.
+확신이 없으면 빈 배열 []을 출력해라. 최대 5개까지만 골라라.`;
+
+async function classifyCourseImages(env, candidateUrls) {
+  if (!candidateUrls || candidateUrls.length === 0) return [];
+  const resp = await env.AI.run(MODEL, {
+    messages: [
+      { role: "system", content: COURSE_CLASSIFY_SYSTEM_PROMPT },
+      { role: "user", content: candidateUrls.join("\n") },
+    ],
+    max_tokens: 500,
+  });
+  const raw = (resp && resp.response) || "";
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed)) return [];
+    // AI가 후보에 없던 URL을 지어내는 경우를 대비해, 실제로 넘겨준 후보 목록에 있는
+    // 것만 남긴다.
+    return parsed.filter((u) => typeof u === "string" && candidateUrls.includes(u));
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * 실제 접수 사이트(regUrl — lookupRegLink가 이미 찾아둔, marathongo.co.kr에서 검증된 링크)를
+ * 대상으로 코스 지도 이미지를 찾아본다. (1) 메인페이지를 가져와 "코스안내" 류 링크가 있으면
+ * 그 서브페이지를(없거나 다른 도메인이면 메인페이지 자체를) 대상으로 (2) 이미지 후보를 추리고
+ * (3) Workers AI에게 그 중 코스 지도로 보이는 것만 골라달라고 맡긴다.
+ */
+async function lookupCourseImage(regUrl, env) {
+  try {
+    const mainHtml = await fetchPageText(regUrl);
+    const courseLink = findCourseLink(mainHtml, regUrl);
+
+    let targetHtml = mainHtml;
+    let targetUrl = regUrl;
+    if (courseLink) {
+      try {
+        // 임의의 외부 사이트로 새는 걸 막기 위해, 코스안내 링크가 같은 사이트(오리진) 안일
+        // 때만 따라간다. 다른 오리진이면 그냥 메인페이지를 대상으로 계속 진행한다.
+        if (new URL(courseLink).origin === new URL(regUrl).origin) {
+          targetHtml = await fetchPageText(courseLink);
+          targetUrl = courseLink;
+        }
+      } catch (e) {
+        // 서브페이지 조회 실패해도 메인페이지 후보로 계속 진행
+      }
+    }
+
+    const candidates = extractImageCandidates(targetHtml, targetUrl);
+    if (candidates.length === 0) return { found: false };
+
+    const imageUrls = await classifyCourseImages(env, candidates);
+    return imageUrls.length > 0 ? { found: true, imageUrls, sourceUrl: targetUrl } : { found: false };
+  } catch (e) {
+    return { found: false, error: "lookup_failed" };
+  }
+}
+
 // 아래 named export들은 Cloudflare Workers 배포에는 아무 영향이 없고(엔트리포인트는
 // default export만 사용됨), 로컬에서 순수 함수 단위로 파싱 로직을 테스트할 때만 쓰인다.
 export {
@@ -910,6 +1049,10 @@ export {
   findMarathonGoMatch,
   extractMarathonGoRegLink,
   lookupRegLink,
+  findCourseLink,
+  extractImageCandidates,
+  classifyCourseImages,
+  lookupCourseImage,
 };
 
 export default {
@@ -959,9 +1102,53 @@ export default {
       });
     }
 
+    if (url.pathname === "/api/course") {
+      const name = (url.searchParams.get("name") || "").trim();
+      const date = (url.searchParams.get("date") || "").trim();
+      const regUrl = (url.searchParams.get("url") || "").trim();
+      // url은 반드시 http(s)여야 한다 — 앱은 항상 /api/reglink가 찾아준 검증된 링크만 넘겨야
+      // 하지만, 혹시 모를 이상한 프로토콜/값이 들어와도 여기서 한 번 더 막는다.
+      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^https?:\/\//i.test(regUrl)) {
+        return new Response(JSON.stringify({ found: false, error: "invalid_params" }), {
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+        });
+      }
+
+      // 캐시는 name+date로 키를 잡는다(reglink와 동일한 관례) — 같은 대회는 접수 링크가
+      // 안 바뀌는 한 url도 항상 같이 들어오므로 이걸로 충분하다.
+      const courseCacheUrl = new URL("https://cache.internal/course");
+      courseCacheUrl.searchParams.set("name", name);
+      courseCacheUrl.searchParams.set("date", date);
+      const courseCacheKey = new Request(courseCacheUrl.toString());
+      const cache = caches.default;
+
+      try {
+        const cached = await cache.match(courseCacheKey);
+        if (cached) {
+          const bodyObj = await cached.json();
+          return new Response(JSON.stringify(bodyObj), {
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "HIT" },
+          });
+        }
+      } catch (e) {
+        // 캐시 읽기 실패 시 그냥 새로 조회
+      }
+
+      const bodyObj = await lookupCourseImage(regUrl, env);
+
+      const cacheResponse = new Response(JSON.stringify(bodyObj), {
+        headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${COURSE_CACHE_TTL_SECONDS}` },
+      });
+      ctx.waitUntil(cache.put(courseCacheKey, cacheResponse));
+
+      return new Response(JSON.stringify(bodyObj), {
+        headers: { "Content-Type": "application/json", ...corsHeaders(origin), "X-Cache": "MISS" },
+      });
+    }
+
     if (url.pathname !== "/api/schedule") {
       return new Response(
-        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타) 또는 GET /api/reglink?name=<대회명>&date=<YYYY-MM-DD>" }),
+        JSON.stringify({ error: "not_found", usage: "GET /api/schedule?region=<지역명> (예: 강원, 서울, 전국, 기타) 또는 GET /api/reglink?name=<대회명>&date=<YYYY-MM-DD> 또는 GET /api/course?name=<대회명>&date=<YYYY-MM-DD>&url=<접수사이트 URL>" }),
         { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders(origin) } }
       );
     }
