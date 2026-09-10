@@ -1435,9 +1435,14 @@
     if (!courseBackdrop.classList.contains("open")) return; // 그 사이 닫혔으면 무시
 
     if (result && result.found && Array.isArray(result.imageUrls) && result.imageUrls.length){
+      // manual: true 면 자동 스크래핑/AI 추측이 아니라 직접 확인해서 등록해둔 이미지라,
+      // "다를 수 있음" 경고 대신 더 담백한 안내만 보여준다.
+      const note = result.manual
+        ? "공식 홈페이지에서 확인한 코스 지도예요. 그래도 최신 변경 사항은 대회 홈페이지에서 한 번 더 확인하세요."
+        : "자동으로 찾은 이미지라 실제 코스와 다르거나 옛 정보일 수 있어요. 확정된 코스는 공식 홈페이지에서 다시 확인하세요.";
       courseBody.innerHTML =
         result.imageUrls.map(u => `<img class="course-img" src="${u}" alt="${ev.name} 코스 지도" loading="lazy">`).join("") +
-        `<div class="course-note">자동으로 찾은 이미지라 실제 코스와 다르거나 옛 정보일 수 있어요. 확정된 코스는 공식 홈페이지에서 다시 확인하세요.</div>`;
+        `<div class="course-note">${note}</div>`;
     } else {
       courseBody.innerHTML = `<div class="course-empty">코스 이미지를 찾을 수 없었어요.<br>공식 홈페이지에서 직접 확인해주세요.</div>`;
     }
